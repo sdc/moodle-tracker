@@ -15,10 +15,10 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Edit the grade options for an individual grade item
+ * A script, to be run via cron, to pull L3VA scores from Leap and generate the MAG, for each student on specifically-tagged courses.
  *
- * @package   core_grades
- * @copyright 2007 Petr Skoda
+ * @package   ext_cron
+ * @copyright 2014 Paul Vaughan
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -28,7 +28,7 @@ define('CLI_SCRIPT', true);
 
 require_once 'config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
-require_once $CFG->dirroot.'/grade/report/lib.php';
+//require_once $CFG->dirroot.'/grade/report/lib.php';
 
 // Define the wanted column names (will appear in this order in the Gradebook, initially).
 $column_names = array(
@@ -41,13 +41,13 @@ $column_names = array(
 $cat_name = 'Targets';
 
 // Just this course for now.
-$courseid = 3;
-// In the future, ALL courses which exist in the DB except 1 and a (manual) blacklist?
+$courseid = 2;
+// In the future, ALL courses which are appropriately tagged.
 
 // Get the course.
 if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
     //print_error('nocourseid');
-    echo 'No course with ID ' . $courseid . ' could be found in the database.';
+    echo 'No course with ID ' . $courseid . ' could be found in the database.'."\n";
 } else {
 
     /**
@@ -75,12 +75,18 @@ if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
     }
 
     // We've either checked a category exists or created one, so this *should* always work.
-    $cat_id = $DB->get_record( 'grade_categories', array( 'courseid' => $courseid, 'fullname' => $cat_name ) );
+    $cat_id = $DB->get_record( 'grade_categories', array(
+        'courseid' => $courseid,
+        'fullname' => $cat_name,
+    ) );
     $cat_id = $cat_id->id;
 
-    // One thing we need to do is set 'gradetype' to 0 on that newly created categoty.
-    //$DB->set_field_select('event', 'eventtype', 'due', "eventtype = '' AND courseid != 0 AND groupid = 0 AND (modulename = 'assignment' OR modulename = 'assign')");
-    $DB->set_field_select();
+    // One thing we need to do (aesthetic reasons) is set 'gradetype' to 0 on that newly created category.
+    $DB->set_field_select('grade_items', 'gradetype', 0, null, array(
+        'courseid'      => $courseid,
+        'itemtype'      => 'category',
+        'iteminstance'  => $cat_id,
+    ) );
 
 
     /**
@@ -92,9 +98,9 @@ if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
         // Need to check for previously-created columns and skip creation if they already exist.
         if ( $DB->get_record('grade_items', array( 'courseid' => $courseid, 'itemname' => $col_name ) ) ) {
             echo 'Manual column ' . $col_name . ' already exists for course ' . $courseid . ', so skipping.'."\n";
-        } else { 
+        } else {
 
-            // Create a new item object. 
+            // Create a new item object.
             $grade_item = new grade_item( array( 'courseid' => $courseid, 'itemtype' => 'manual' ), false );
 
             // The item's name.

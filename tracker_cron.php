@@ -30,6 +30,14 @@ require_once 'config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
 //require_once $CFG->dirroot.'/grade/report/lib.php';
 
+// A little function to make the output look nice.
+function tlog($msg, $type = 'ok') {
+
+    $out = ( $type == 'ok' ) ? $type = '[ ok ]' : $type = '['.$type.']';
+    echo $out . ' ' . $msg . "\n";
+
+}
+
 // Define the wanted column names (will appear in this order in the Gradebook, initially).
 $column_names = array(
     'TAG'   => 'Taregt Achievable Grade.',
@@ -40,25 +48,29 @@ $column_names = array(
 // Category details for the above columns to go into.
 $cat_name = 'Targets';
 
-// Just this course for now.
-$courseid = 2;
-// In the future, ALL courses which are appropriately tagged.
+// All courses which are appropriately tagged.
+$courses = $DB->get_records_select(
+    'course',
+    "idnumber LIKE '%|leapcore_%|%'",
+    null,
+    "id ASC",
+    'id, shortname, fullname'
+);
 
-// Get the course.
-if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
-    //print_error('nocourseid');
-    echo 'No course with ID ' . $courseid . ' could be found in the database.'."\n";
-} else {
+foreach ($courses as $course) {
+
+    tlog('Processing course ' . $course->id . ' (' . $course->shortname . ').', 'info');
 
     /**
      * Category checking or creation.
      */
-    if ( $DB->get_record( 'grade_categories', array( 'courseid' => $courseid, 'fullname' => $cat_name ) ) ) {
+    if ( $DB->get_record( 'grade_categories', array( 'courseid' => $course->id, 'fullname' => $cat_name ) ) ) {
         // Category exists, so skip creation.
-        echo 'Manual category ' . $cat_name . ' already exists for course ' . $courseid . ', so skipping.'."\n";
+        tlog('Category \'' . $cat_name . '\' already exists for course ' . $course->id . '.', 'skip');
+
     } else {
         // Create a category for this course.
-        $grade_category = new grade_category( array( 'courseid' => $courseid ), false);
+        $grade_category = new grade_category( array( 'courseid' => $course->id ), false);
         //$grade_category->apply_default_settings();
         //$grade_category->apply_forced_settings();
 
@@ -71,19 +83,20 @@ if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
 
         // Save all that...
         $grade_category->insert();
-        echo 'Manual category ' . $cat_name . ' created for course '.$courseid.".\n";
+
+        tlog('Category \'' . $cat_name . '\' created for course '.$course->id.'.');
     }
 
     // We've either checked a category exists or created one, so this *should* always work.
     $cat_id = $DB->get_record( 'grade_categories', array(
-        'courseid' => $courseid,
+        'courseid' => $course->id,
         'fullname' => $cat_name,
     ) );
     $cat_id = $cat_id->id;
 
     // One thing we need to do (aesthetic reasons) is set 'gradetype' to 0 on that newly created category.
     $DB->set_field_select('grade_items', 'gradetype', 0, null, array(
-        'courseid'      => $courseid,
+        'courseid'      => $course->id,
         'itemtype'      => 'category',
         'iteminstance'  => $cat_id,
     ) );
@@ -96,12 +109,14 @@ if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
     foreach ( $column_names as $col_name => $col_desc ) {
 
         // Need to check for previously-created columns and skip creation if they already exist.
-        if ( $DB->get_record('grade_items', array( 'courseid' => $courseid, 'itemname' => $col_name ) ) ) {
-            echo 'Manual column ' . $col_name . ' already exists for course ' . $courseid . ', so skipping.'."\n";
+        if ( $DB->get_record('grade_items', array( 'courseid' => $course->id, 'itemname' => $col_name, 'itemtype' => 'manual' ) ) ) {
+            // Column exists, so skip creation.
+            tlog(' Column \'' . $col_name . '\' already exists for course ' . $course->id . '.', 'skip');
+
         } else {
 
             // Create a new item object.
-            $grade_item = new grade_item( array( 'courseid' => $courseid, 'itemtype' => 'manual' ), false );
+            $grade_item = new grade_item( array( 'courseid' => $course->id, 'itemtype' => 'manual' ), false );
 
             // The item's name.
             $grade_item->itemname = $col_name;
@@ -132,12 +147,13 @@ if ( !$course = $DB->get_record( 'course', array( 'id' => $courseid ) ) ) {
             // Not sure if want.
             //$grade_item->itemtype = 'manual';
 
-            // Save it all, probably.
+            // Save it all.
             $grade_item->insert();
-            echo 'Manual column ' . $col_name . ' created for course '.$courseid.".\n";
+
+            tlog(' Column \'' . $col_name . '\' created for course ' . $course->id . '.');
 
         } // END skip processing if manual column(s) already found in course.
 
     } // END while working through each rquired column.
 
-} // END find course in the database.
+} // END foreach course tagged 'leapcore_*'.

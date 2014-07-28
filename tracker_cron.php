@@ -38,12 +38,14 @@ define( 'LEAP_TRACKER_API', 'http://localhost/api.php?hash=%s&id=%s' );
 //define('LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
 
 // Define the scale types and numbers (taken from mdl_scales).
-define ( 'SCALE_ALEVEL',    1); // A B C D E U
-define ( 'SCALE_BTEC',      2); // Pass, Merit, Distinction
-define ( 'SCALE_COMPLETE',  3); // Not Complete, Partially Complete, Complete
-define ( 'SCALE_GCSE',      4); // A B C D E F U
-define ( 'SCALE_PASS',      5); // Refer, Pass
-//define ( 'SCALE_PERCENT',   6); // 0-100%? Requested but not allocated to a course type.
+$course_type_scales = array(
+    'leapcourse_alevel'     => 1, // A Level scale: A B C D E U.
+    'leapcourse_btec'       => 2, // BTEC scale: Pass, Merit, Distinction.
+    'leapcourse_functional' => 3, // Complete scale: Not Complete, Partially Complete, Complete.
+    'leapcourse_gcse'       => 4, // GCSE scale: A B C D E F U.
+    'leapcourse_vrq'        => 5, // Pass scale: Refer, Pass.
+    'leapcourse_percent'    => 6, // 0-100%? Requested but not allocated to a course type.
+);
 
 // Number of decimal places in the processed targets.
 define( 'DECIMALS', 3 );
@@ -112,9 +114,12 @@ $courses = $DB->get_records_select(
     "idnumber LIKE '%|leapcore_%|%'",
     null,
     "id ASC",
-    'id, shortname'
+    'id, shortname, idnumber'
 );
-
+if ( !$courses ) {
+    tlog('No courses tagged \'leapcore_*\' found, so halting.', 'EROR');
+    exit(0);
+}
 
 /**
  * Sets up each course tagged with leapcore_ with a category and columns within it.
@@ -122,6 +127,19 @@ $courses = $DB->get_records_select(
 foreach ($courses as $course) {
 
     tlog('Processing course ' . $course->shortname . ' (' . $course->id . ').', 'info');
+
+    // Figure out the scale here. Scales are defined at the top (based on mdl_scale.id) and applied based on how the course is tagged.
+    $scaleid = 0;
+    foreach ( $course_type_scales as $type => $scale) {
+        if ( stripos( $course->idnumber, $type ) ) {
+            tlog('Course type \'' . $type . '\' found for course ' . $course->id . '.' );
+            $scaleid = $scale;
+            break;
+        }
+    }
+    if ( !$scaleid ) {
+        tlog('No course type \'leapcourse_*\' found for course ' . $course->id . ', so no scale could be set.', 'warn' );
+    }
 
     /**
      * Category checking or creation.
@@ -204,8 +222,8 @@ foreach ($courses as $course) {
                 $grade_item->locked     = 1;
             }
 
-            // Apply the scales here. Scales are defined at the top (based on mdl_scale.id) and applied based on how the course is tagged.
-
+            // Scale ID, generated earlier. An int, 0 or greater.
+            $grade_item->scale = $scaleid;
 
             // Save it all.
             if ( !$gi = $grade_item->insert() ) {

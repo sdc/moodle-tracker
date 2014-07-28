@@ -27,15 +27,25 @@
 define( 'CLI_SCRIPT', true );
 
 // Sample Leap Tracker API URL.
-define( 'LEAP_TRACKER_API', 'http://172.21.4.85/api.php?hash=%s&id=%s' );
+//define( 'LEAP_TRACKER_API', 'http://172.21.4.85/api.php?hash=%s&id=%s' );
+define( 'LEAP_TRACKER_API', 'http://localhost/api.php?hash=%s&id=%s' );
 // Another sample Leap Tracker API URL.
 //define('LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
+
+// Number of decimal places in the processed targets.
+define( 'DECIMALS', 3 );
 
 // Debugging.
 define( 'DEBUG', true );
 
 require_once 'config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
+
+// Check for the required config setting in config.php.
+if ( !$CFG->trackerhash ) {
+    tlog('$CFG->trackerhash not set in config.php.', 'EROR');
+    die();
+}
 
 // A little function to make the output look nice.
 function tlog($msg, $type = 'ok') {
@@ -54,11 +64,16 @@ function make_mag_tag($in, $type) {
 
     if ( $type == '' || $type == 'mag' ) {
         // Calculate the MAG (default).
-        return ( $in + ( $in * .1 ) );
+        $out = $in + ( $in * .099 );
+        return number_format( $out, DECIMALS );
 
     } else if ( $type == 'tag' ) {
         // Calculate the TAG.
-        return ( $in + ( $in * .25 ) );
+        $out = $in + ( $in * .247 );
+        return number_format( $out, DECIMALS );
+
+    } else {
+        return false;
     }
 }
 
@@ -70,9 +85,9 @@ $column_names = array(
 );
 
 // Make an array keyed to the column names to store the grades in.
-$grades = array();
+$targets = array();
 foreach ( $column_names as $name => $desc ) {
-    $grades[strtolower($name)] = '';
+    $targets[strtolower($name)] = '';
 }
 
 // Category details for the above columns to go into.
@@ -249,7 +264,10 @@ foreach ($courses as $course) {
                 tlog(' Processing (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] on course ' . $course->id . '.', 'info');
 
                 // Assemble the URL with the correct data.
-                $leapdataurl = sprintf( LEAP_TRACKER_API, $enrollee->studentid, $CFG->trackerhash );
+                $leapdataurl = sprintf( LEAP_TRACKER_API, $CFG->trackerhash, $enrollee->studentid );
+                if ( DEBUG ) {
+                    tlog('  Leap URL: ' . $leapdataurl, 'dbug');
+                }
 
                 // Use fopen to read from the API.
                 $handle = fopen($leapdataurl, 'r');
@@ -263,7 +281,7 @@ foreach ($courses as $course) {
                     fclose($handle);
 
                     if ( DEBUG ) {
-//                        tlog('  Returned JSON: ' . $leapdata, 'dbug');
+                        tlog('  Returned JSON: ' . $leapdata, 'dbug');
                     }
 
                     // Handle an empty result from the API.
@@ -288,34 +306,31 @@ foreach ($courses as $course) {
 //
 //                            } else {
                                 // We have a L3VA score! Woo!
-                                //$grades['l3va'] = $leapdata->data->scores->l3va;
-                                $grades['l3va'] = $leapdata->person->l3va;
-                                if ( $grades['l3va'] == '' || !is_numeric( $grades['l3va'] ) || $grades['l3va'] < 0 ) {
+                                //$targets['l3va'] = $leapdata->data->scores->l3va;
+                                $targets['l3va'] = number_format( $leapdata->person->l3va, DECIMALS );
+                                if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] < 0 ) {
                                     // If the L3VA isn't good.
-                                    tlog('  L3VA is not good: \'' . $grades['l3va'] . '\'.', 'warn');
+                                    tlog('  L3VA is not good: \'' . $targets['l3va'] . '\'.', 'warn');
 
                                 } else {
 
-                                    tlog('  ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] L3VA score: ' . $grades['l3va'] . '.', 'info');
+                                    tlog('  ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] L3VA score: ' . $targets['l3va'] . '.', 'info');
 
                                     // Make the MAG from the L3VA.
-                                    if ( !$mag = make_mag_tag( $grades['l3va'] ) ) {
-                                        // If the MAG failed to generate for some reason.
-                                        tlog('   MAG failed to generate.', 'EROR');
+                                    $targets['mag'] = make_mag_tag( $targets['l3va'] );
+                                    $targets['tag'] = make_mag_tag( $targets['l3va'], 'tag' );
 
-                                    } else {
-                                        if ( DEBUG ) {
-                                            tlog('   MAG: ' . $mag . '.', 'dbug');
-                                        }
+                                    if ( DEBUG ) {
+                                        tlog('   MAG: ' . $targets['mag'] . '. TAG: ' . $targets['tag'] . '.', 'dbug');
+                                    }
 
-                                        /* Loop through all three settable, updateable grades eventually. */
-
-                                        /* Scales to be loaded here too, eventually. */
+                                    // Loop through all three settable, updateable grades.
+                                    foreach ( $targets as $target => $score ) {
 
                                         // Need the grade_items.id for grade_grades.itemid.
                                         $gradeitem = $DB->get_record('grade_items', array( 
                                             'courseid' => $course->id,
-                                            'itemname' => 'L3VA'
+                                            'itemname' => strtoupper( $target ),
                                         ), 'id, categoryid');
 
                                         // Check to see if this data already exists in the database, so we can insert or update.
@@ -323,21 +338,23 @@ foreach ($courses as $course) {
                                             'itemid' => $gradeitem->id,
                                         ), 'id');
 
+                                        /* Scales to be loaded here too, eventually. */
+
                                         // New grade_grade object.
                                         $grade = new grade_grade();
                                         $grade->userid          = $enrollee->userid;
                                         $grade->itemid          = $gradeitem->id;
                                         $grade->categoryid      = $gradeitem->categoryid;
-                                        $grade->finalgrade      = $l3va;
+                                        $grade->finalgrade      = $score;
                                         $grade->timecreated     = time();
-                                        $grade->timemodified    = $grade_l3va->timecreated;
+                                        $grade->timemodified    = $grade->timecreated;
 
                                         if ( !$gradegrade ) {
                                             // No id exists, so insert.
                                             if ( !$gl = $grade->insert() ) {
-                                                tlog('   L3VA insert failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
+                                                tlog('   ' . strtoupper( $target ) . ' insert failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
                                             } else {
-                                                tlog('   L3VA (' . $l3va . ') inserted for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
+                                                tlog('   ' . strtoupper( $target ) . ' (' . $score . ') inserted for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
                                             }
 
                                         } else {
@@ -349,14 +366,14 @@ foreach ($courses as $course) {
                                             $grade->timemodified = time();
 
                                             if ( !$gl = $grade->update() ) {
-                                                tlog('   L3VA update failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
+                                                tlog('   ' . strtoupper( $target ) . ' update failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
                                             } else {
-                                                tlog('   L3VA (' . $l3va . ') update for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
+                                                tlog('   ' . strtoupper( $target ) . ' (' . $score . ') update for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
                                             }
 
-                                        }
+                                        } // END insert or update check.
 
-                                    } // END make MAG
+                                    } // END foreach loop.
 
                                 } // END L3VA check.
 

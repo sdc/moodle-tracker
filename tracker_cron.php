@@ -22,6 +22,11 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+// Script start time.
+$time_start = microtime(true);
+
+tlog('Started at ' . date( 'c', $time_start ) . '.', ' go ');
+tlog('', '----');
 
 // Make this work from a CLI.
 define( 'CLI_SCRIPT', true );
@@ -31,6 +36,14 @@ define( 'CLI_SCRIPT', true );
 define( 'LEAP_TRACKER_API', 'http://localhost/api.php?hash=%s&id=%s' );
 // Another sample Leap Tracker API URL.
 //define('LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
+
+// Define the scale types and numbers (taken from mdl_scales).
+define ( 'SCALE_ALEVEL',    1); // A B C D E U
+define ( 'SCALE_BTEC',      2); // Pass, Merit, Distinction
+define ( 'SCALE_COMPLETE',  3); // Not Complete, Partially Complete, Complete
+define ( 'SCALE_GCSE',      4); // A B C D E F U
+define ( 'SCALE_PASS',      5); // Refer, Pass
+//define ( 'SCALE_PERCENT',   6); // 0-100%? Requested but not allocated to a course type.
 
 // Number of decimal places in the processed targets.
 define( 'DECIMALS', 3 );
@@ -44,7 +57,7 @@ require_once $CFG->dirroot.'/grade/lib.php';
 // Check for the required config setting in config.php.
 if ( !$CFG->trackerhash ) {
     tlog('$CFG->trackerhash not set in config.php.', 'EROR');
-    die();
+    exit(1);
 }
 
 // A little function to make the output look nice.
@@ -102,9 +115,6 @@ $courses = $DB->get_records_select(
     'id, shortname'
 );
 
-tlog('Started at ' . date( 'c', time() ) . '.', ' go ');
-tlog('', '----');
-
 
 /**
  * Sets up each course tagged with leapcore_ with a category and columns within it.
@@ -132,7 +142,7 @@ foreach ($courses as $course) {
         // Save all that...
         if ( !$gc = $grade_category->insert() ) {
             tlog('Category \'' . $cat_name . '\' could not be inserted for course '.$course->id.'.', 'EROR');
-            break;
+            exit(1);
         } else {
             tlog('Category \'' . $cat_name . '\' (' . $gc . ') created for course '.$course->id.'.');
         }
@@ -145,7 +155,7 @@ foreach ($courses as $course) {
     ) );
     $cat_id = $cat_id->id;
 
-    // One thing we need to do (aesthetic reasons) is set 'gradetype' to 0 on that newly created category.
+    // One thing we need to do (aesthetic reasons) is set 'gradetype' to 0 on that newly created category, which prevents a category total showing.
     $DB->set_field_select('grade_items', 'gradetype', 0, "courseid = " . $course->id . " AND itemtype = 'category' AND iteminstance = " . $cat_id);
 
 
@@ -191,12 +201,16 @@ foreach ($courses as $course) {
             }
             if ( $col_name == 'MAG' ) {
                 $grade_item->sortorder  = 3;
+                $grade_item->locked     = 1;
             }
 
+            // Apply the scales here. Scales are defined at the top (based on mdl_scale.id) and applied based on how the course is tagged.
+
+
             // Save it all.
-            
             if ( !$gi = $grade_item->insert() ) {
                 tlog(' Column \'' . $col_name . '\' could not be inserted for course ' . $course->id . '.', 'EROR');
+                exit(1);
             } else {
                 tlog(' Column \'' . $col_name . '\' created for course ' . $course->id . '.');
             }
@@ -210,14 +224,9 @@ foreach ($courses as $course) {
      * Collect enrolments based on each of those courses
      */
 
-    // query Leap for LAT score
-    // process into MAG and Tag or whatever
-    // insert into gradebook for that course
-
     // EPIC 'get enrolled students' query from Stack Overflow:
     // http://stackoverflow.com/questions/22161606/sql-query-for-courses-enrolment-on-moodle
     // Works in MySQL(I), I hope it works elsewhere too.
-    //$sql = "SELECT DISTINCT c.id AS courseid, c.shortname, u.id AS userid, firstname, lastname
     $sql = "SELECT DISTINCT u.id AS userid, firstname, lastname, username
         FROM mdl_user u
             JOIN mdl_user_enrolments ue ON ue.userid = u.id
@@ -338,8 +347,6 @@ foreach ($courses as $course) {
                                             'itemid' => $gradeitem->id,
                                         ), 'id');
 
-                                        /* Scales to be loaded here too, eventually. */
-
                                         // New grade_grade object.
                                         $grade = new grade_grade();
                                         $grade->userid          = $enrollee->userid;
@@ -359,17 +366,25 @@ foreach ($courses as $course) {
 
                                         } else {
                                             // If the row already exists, update.
-                                            $grade->id = $gradegrade->id;
 
-                                            // Sort out the time.
-                                            unset( $grade->timecreated );
-                                            $grade->timemodified = time();
+                                            // Don't *update* the TAG, ever.
+                                            if ( $target != 'tag' ) {
+                                                $grade->id = $gradegrade->id;
 
-                                            if ( !$gl = $grade->update() ) {
-                                                tlog('   ' . strtoupper( $target ) . ' update failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
+                                                // We don't want to set this again, but we do want the modified time set.
+                                                unset( $grade->timecreated );
+                                                $grade->timemodified = time();
+
+                                                if ( !$gl = $grade->update() ) {
+                                                    tlog('   ' . strtoupper( $target ) . ' update failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
+                                                } else {
+                                                    tlog('   ' . strtoupper( $target ) . ' (' . $score . ') update for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
+                                                }
+
                                             } else {
-                                                tlog('   ' . strtoupper( $target ) . ' (' . $score . ') update for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
-                                            }
+                                                tlog('   ' . strtoupper( $target ) . ' purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'skip' );
+
+                                            } // END ignore updating the TAG.
 
                                         } // END insert or update check.
 
@@ -391,11 +406,16 @@ foreach ($courses as $course) {
 
     }  // END enrollee query.
 
-    
-
     // Final blank-ish log entry to separate out one course from another.
     tlog('', '----');
 
 } // END foreach course tagged 'leapcore_*'.
 
-tlog('Finished at ' . date( 'c', time() ) . '.', 'done');
+// Finish time.
+$time_end = microtime(true);
+
+$duration = $time_end - $time_start;
+
+tlog('Finished at ' . date( 'c', $time_end ) . ', took ' . number_format( $duration, 3 ) . ' seconds.', 'done');
+
+exit(0);

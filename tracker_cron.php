@@ -40,9 +40,9 @@ define( 'LEAP_TRACKER_API', 'http://localhost/api.php?hash=%s&id=%s' );
 // Define the scale types and numbers (taken from mdl_scales).
 $course_type_scales = array(
     'leapcourse_alevel'     => 1, // A Level scale: A B C D E U.
-    'leapcourse_btec'       => 2, // BTEC scale: Pass, Merit, Distinction.
-    'leapcourse_functional' => 3, // Complete scale: Not Complete, Partially Complete, Complete.
-    'leapcourse_gcse'       => 4, // GCSE scale: A B C D E F U.
+    'leapcourse_btec'       => 4, // BTEC scale: Pass, Merit, Distinction.
+    'leapcourse_functional' => 2, // Complete scale: Not Complete, Partially Complete, Complete.
+    'leapcourse_gcse'       => 3, // GCSE scale: A B C D E F U.
     'leapcourse_vrq'        => 5, // Pass scale: Refer, Pass.
     'leapcourse_percent'    => 6, // 0-100%? Requested but not allocated to a course type.
 );
@@ -132,7 +132,7 @@ foreach ($courses as $course) {
     $scaleid = 0;
     foreach ( $course_type_scales as $type => $scale) {
         if ( stripos( $course->idnumber, $type ) ) {
-            tlog('Course type \'' . $type . '\' found for course ' . $course->id . '.' );
+            tlog('Course type \'' . $type . '\' (' . $scale . ') found for course ' . $course->id . '.' );
             $scaleid = $scale;
             break;
         }
@@ -210,6 +210,10 @@ foreach ($courses as $course) {
             // Per-column specifics.
             if ( $col_name == 'TAG' ) {
                 $grade_item->sortorder  = 1;
+                if ( $scaleid ) {
+                    $grade_item->gradetype  = 2; // 'Scale' setting.
+                    $grade_item->scaleid    = $scaleid;
+                }
             }
             if ( $col_name == 'L3VA' ) {
                 // Lock the L3VA col as it's calculated elsewhere.
@@ -220,6 +224,10 @@ foreach ($courses as $course) {
             if ( $col_name == 'MAG' ) {
                 $grade_item->sortorder  = 3;
                 $grade_item->locked     = 1;
+                if ( $scaleid ) {
+                    $grade_item->gradetype  = 2; // 'Scale' setting.
+                    $grade_item->scaleid    = $scaleid;
+                }
             }
 
             // Scale ID, generated earlier. An int, 0 or greater.
@@ -370,7 +378,8 @@ foreach ($courses as $course) {
                                         $grade->userid          = $enrollee->userid;
                                         $grade->itemid          = $gradeitem->id;
                                         $grade->categoryid      = $gradeitem->categoryid;
-                                        $grade->finalgrade      = $score;
+                                        $grade->rawgrade        = $score; // Will stay as set.
+                                        $grade->finalgrade      = $score; // Will change with the grade, e.g. 3.
                                         $grade->timecreated     = time();
                                         $grade->timemodified    = $grade->timecreated;
 

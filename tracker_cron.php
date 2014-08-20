@@ -38,6 +38,7 @@ define( 'LEAP_TRACKER_API', 'http://localhost/api.php?hash=%s&id=%s' );
 //define('LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
 
 // Define the scale types and numbers (taken from mdl_scales).
+// TODO: Stop using this! Query the course's gradebook and mdl_scale, and pull the scale name and details from there instead.
 $course_type_scales = array(
     'leapcourse_alevel'     => 1, // A Level scale: A B C D E U.
     'leapcourse_btec'       => 4, // BTEC scale: Pass, Merit, Distinction.
@@ -55,6 +56,7 @@ define( 'DEBUG', true );
 
 require_once 'config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
+require_once $CFG->dirroot.'/grade/edit/tree/lib.php';
 
 // Check for the required config setting in config.php.
 if ( !$CFG->trackerhash ) {
@@ -71,7 +73,7 @@ function tlog($msg, $type = 'ok') {
 }
 
 // Process the L3VA score into a MAG.
-function make_mag_tag($in, $type) {
+function make_mag_tag( $in, $type = '' ) {
 
     if ( $in == '' || !is_numeric($in) || $in <= 0 || !$in ) {
         return false;
@@ -112,6 +114,7 @@ $cat_name = 'Targets';
 $courses = $DB->get_records_select(
     'course',
     "idnumber LIKE '%|leapcore_%|%'",
+    //"idnumber LIKE '%|leapcore_test|%'",
     null,
     "id ASC",
     'id, shortname, idnumber'
@@ -126,10 +129,17 @@ if ( !$courses ) {
  */
 foreach ($courses as $course) {
 
+//$thing = new grade_seq(2);
+//print_object($thing);
+//die();
+
+
     tlog('Processing course ' . $course->shortname . ' (' . $course->id . ').', 'info');
 
+/*
     // Figure out the scale here. Scales are defined at the top (based on mdl_scale.id) and applied based on how the course is tagged.
     $scaleid = 0;
+
     foreach ( $course_type_scales as $type => $scale) {
         if ( stripos( $course->idnumber, $type ) ) {
             tlog('Course type \'' . $type . '\' (' . $scale . ') found for course ' . $course->id . '.' );
@@ -137,9 +147,54 @@ foreach ($courses as $course) {
             break;
         }
     }
+
     if ( !$scaleid ) {
         tlog('No course type \'leapcourse_*\' found for course ' . $course->id . ', so no scale could be set.', 'warn' );
     }
+*/
+
+    $gradetypes = array (
+        0 => 'None',    // Scale ID: null
+        1 => 'Value',   // Scale ID: null. Uses grademax and grademin instead.
+        2 => 'Scale',   // Scale ID depends on whatever's available: IDs relate to mdl_scale.id.
+        3 => 'Text',    // ...
+    );
+
+    // Figure out the grade type and scale here, pulled directly from the course's gradebook's course itemtype.
+    if ( $coursegradescale = $DB->get_record( 'grade_items', array( 'courseid' => $course->id, 'itemtype' => 'course' ), 'gradetype, scaleid' ) ) {
+        //var_dump($coursegradescale);
+        $gradeid = $coursegradescale->gradetype;
+        $scaleid = $coursegradescale->scaleid;
+
+        // Found a grade type
+        tlog('Gradetype \'' . $gradeid . '\' (' . $gradetypes[$gradeid] . ') found.', 'info');
+
+        // If the grade type is 2 / scale.
+        if ( $gradeid == 2 ) {
+            if ( $coursescale = $DB->get_record( 'scale', array( 'id' => $scaleid = $coursegradescale->scaleid ) ) ) {
+
+                // We don't need to do anything with this just yet.
+                $tolog = ' Scale \'' . $coursescale->id . '\' (' . $coursescale->name . ') found [' . $coursescale->scale . ']';
+                $tolog .= ( $coursescale->courseid ) ? ' (which is specific to course ' . $coursescale->courseid . ')' : ' (which is global)';
+                $tolog .= '.';
+                tlog($tolog, 'info');
+
+            } else {
+
+                // If the scale doesn't exist that the course is using, this is a problem.
+                tlog(' Gradetype \'2\' set, but no matching scale found.', 'warn');
+
+            }
+        }
+
+    } else {
+        // Set it to default if no good scale could be found/used.
+        $gradeid = 0;
+        $scaleid = 0;
+        tlog('No \'gradetype\' found, so using defaults instead.', 'info');
+    }
+
+
 
     /**
      * Category checking or creation.
@@ -154,8 +209,12 @@ foreach ($courses as $course) {
 
         // Course id.
         $grade_category->courseid = $course->id;
+
         // Set the category name (no description).
         $grade_category->fullname = $cat_name;
+
+        // Set the sort order (making this the first category in the gradebook, hopefully).
+        $grade_category->sortorder = 1;
 
         // Save all that...
         if ( !$gc = $grade_category->insert() ) {
@@ -173,9 +232,13 @@ foreach ($courses as $course) {
     ) );
     $cat_id = $cat_id->id;
 
-    // One thing we need to do (aesthetic reasons) is set 'gradetype' to 0 on that newly created category, which prevents a category total showing.
+    // One thing we need to do is set 'gradetype' to 0 on that newly created category, which prevents a category total showing
+    // and the grades counting towards the total course grade.
     $DB->set_field_select('grade_items', 'gradetype', 0, "courseid = " . $course->id . " AND itemtype = 'category' AND iteminstance = " . $cat_id);
 
+    // Move the category to the first position in the gradebook. Need some Moodle functions for this.
+    //$gtree = new grade_tree($course->id, false, false);
+    //$temp = grade_edit_tree::move_elements(1, '')
 
     /**
      * Column checking or creation.
@@ -210,10 +273,10 @@ foreach ($courses as $course) {
             // Per-column specifics.
             if ( $col_name == 'TAG' ) {
                 $grade_item->sortorder  = 1;
-                if ( $scaleid ) {
-                    $grade_item->gradetype  = 2; // 'Scale' setting.
+//                if ( $scaleid ) {
+                    $grade_item->gradetype  = $gradeid;
                     $grade_item->scaleid    = $scaleid;
-                }
+//                }
             }
             if ( $col_name == 'L3VA' ) {
                 // Lock the L3VA col as it's calculated elsewhere.
@@ -224,10 +287,10 @@ foreach ($courses as $course) {
             if ( $col_name == 'MAG' ) {
                 $grade_item->sortorder  = 3;
                 $grade_item->locked     = 1;
-                if ( $scaleid ) {
-                    $grade_item->gradetype  = 2; // 'Scale' setting.
+//                if ( $scaleid ) {
+                    $grade_item->gradetype  = $gradeid;
                     $grade_item->scaleid    = $scaleid;
-                }
+//                }
             }
 
             // Scale ID, generated earlier. An int, 0 or greater.
@@ -273,7 +336,7 @@ foreach ($courses as $course) {
                 OR ue.timeend > NOW() 
             ) 
             AND ue.status = 0
-        ORDER BY courseid ASC, userid ASC;";
+        ORDER BY userid ASC;";
 
     if ( !$enrollees = $DB->get_records_sql( $sql ) ) {
         tlog('No enrolled students found for course ' . $course->id . '.', 'warn');
@@ -353,7 +416,10 @@ foreach ($courses as $course) {
 
                                     // Make the MAG from the L3VA.
                                     $targets['mag'] = make_mag_tag( $targets['l3va'] );
-                                    $targets['tag'] = make_mag_tag( $targets['l3va'], 'tag' );
+
+                                    // Make the TAG, or don't: wanted to suggest a TAG but it's better left empty, apparently.
+                                    //$targets['tag'] = make_mag_tag( $targets['l3va'], 'tag' );
+                                    $targets['tag'] = 0;
 
                                     if ( DEBUG ) {
                                         tlog('   MAG: ' . $targets['mag'] . '. TAG: ' . $targets['tag'] . '.', 'dbug');
@@ -443,6 +509,6 @@ $time_end = microtime(true);
 
 $duration = $time_end - $time_start;
 
-tlog('Finished at ' . date( 'c', $time_end ) . ', took ' . number_format( $duration, 3 ) . ' seconds.', 'done');
+tlog('Finished at ' . date( 'c', $time_end ) . ', took ' . number_format( $duration, DECIMALS ) . ' seconds.', 'done');
 
 exit(0);

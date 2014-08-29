@@ -33,36 +33,58 @@ define( 'CLI_SCRIPT', true );
 
 // Sample Leap Tracker API URL.
 //define( 'LEAP_TRACKER_API', 'http://172.21.4.85/api.php?hash=%s&id=%s' );
-define( 'LEAP_TRACKER_API', 'http://localhost/api.php?hash=%s&id=%s' );
 // Another sample Leap Tracker API URL.
-//define('LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
+define( 'LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
 
-// Define the scale types and numbers (taken from mdl_scales).
-// TODO: Stop using this! Query the course's gradebook and mdl_scale, and pull the scale name and details from there instead.
-$course_type_scales = array(
-    'leapcourse_alevel'     => 1, // A Level scale: A B C D E U.
-    'leapcourse_btec'       => 4, // BTEC scale: Pass, Merit, Distinction.
-    'leapcourse_functional' => 2, // Complete scale: Not Complete, Partially Complete, Complete.
-    'leapcourse_gcse'       => 3, // GCSE scale: A B C D E F U.
-    'leapcourse_vrq'        => 5, // Pass scale: Refer, Pass.
-    'leapcourse_percent'    => 6, // 0-100%? Requested but not allocated to a course type.
-);
-
-// Number of decimal places in the processed targets.
+// Number of decimal places in the processed targets (and elsewhere).
 define( 'DECIMALS', 3 );
 
 // Debugging.
 define( 'DEBUG', true );
 
+// Search term to use when searching for courses to process.
+define( 'IDNUMBERLIKE', 'leapcore_%' );
+//define( 'IDNUMBERLIKE', 'leapcore_test' );
+
 require_once 'config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
-require_once $CFG->dirroot.'/grade/edit/tree/lib.php';
 
 // Check for the required config setting in config.php.
 if ( !$CFG->trackerhash ) {
     tlog('$CFG->trackerhash not set in config.php.', 'EROR');
     exit(1);
 }
+
+$l3va_data = array(
+    'leapcore_a2_artdes'        => array('m' => 4.4727, 'c' => 98.056),
+    'leapcore_a2_artdesphoto'   => array('m' => 4.1855, 'c' => 79.949),
+    'leapcore_a2_artdestext'    => array('m' => 3.9430, 'c' => 66.967),
+    'leapcore_a2_biology'       => array('m' => 5.2471, 'c' => 166.67),
+    'leapcore_a2_busstud'       => array('m' => 4.8372, 'c' => 123.41),
+    'leapcore_a2_chemistry'     => array('m' => 4.5169, 'c' => 129.00),
+    'leapcore_a2_englishlang'   => array('m' => 4.5773, 'c' => 112.14),
+    'leapcore_a2_englishlit'    => array('m' => 5.0872, 'c' => 137.31),
+    'leapcore_a2_envsci'        => array('m' => 6.1058, 'c' => 196.66),
+    'leapcore_a2_envstud'       => array('m' => 6.1058, 'c' => 196.66),
+    'leapcore_a2_filmstud'      => array('m' => 4.0471, 'c' => 76.470),
+    'leapcore_a2_geography'     => array('m' => 5.4727, 'c' => 156.16),
+    'leapcore_a2_history'       => array('m' => 4.6593, 'c' => 118.98),
+    'leapcore_a2_law'           => array('m' => 5.1047, 'c' => 140.69),
+    'leapcore_a2_maths'         => array('m' => 4.5738, 'c' => 119.43),
+    'leapcore_a2_mathsfurther'  => array('m' => 4.4709, 'c' => 106.40),
+    'leapcore_a2_media'         => array('m' => 4.2884, 'c' => 90.279),
+    'leapcore_a2_philosophy'    => array('m' => 4.7645, 'c' => 128.95),
+    'leapcore_a2_physics'       => array('m' => 5.0965, 'c' => 159.08),
+    'leapcore_a2_psychology'    => array('m' => 5.3872, 'c' => 158.71),
+    'leapcore_a2_sociology'     => array('m' => 4.9645, 'c' => 122.95),
+
+    'leapcore_btecex_applsci'   => array('m' => 10.606, 'c' => 269.15),
+
+    'leapcore_default'          => array('m' => 4.8008, 'c' => 126.18),
+
+);
+
+//var_dump($l3va_data); die();
 
 // A little function to make the output look nice.
 function tlog($msg, $type = 'ok') {
@@ -73,32 +95,77 @@ function tlog($msg, $type = 'ok') {
 }
 
 // Process the L3VA score into a MAG.
-function make_mag_tag( $in, $type = '' ) {
+function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = false ) {
+
+//die('scale:' . $scale);
 
     if ( $in == '' || !is_numeric($in) || $in <= 0 || !$in ) {
         return false;
     }
-
-    if ( $type == '' || $type == 'mag' ) {
-        // Calculate the MAG (default).
-        $out = $in + ( $in * .099 );
-        return number_format( $out, DECIMALS );
-
-    } else if ( $type == 'tag' ) {
-        // Calculate the TAG.
-        $out = $in + ( $in * .247 );
-        return number_format( $out, DECIMALS );
-
-    } else {
+    if ( $course == '' || !$in ) {
         return false;
     }
+
+    global $l3va_data;
+
+    // Adjust the score acording to formulas.
+    $adj_l3va = ( $l3va_data[$course]['m'] * $in ) - $l3va_data[$course]['c'];
+
+    // Return a grade based on whatever scale we're using.
+    if ( $scale == 'BTEC' ) {
+        // Using BTEC scale.
+        
+        $score = 1; // Refer
+        if ( $adj_l3va >= 30 ) {
+            $score = 2; // Pass
+        }
+        if ( $adj_l3va >= 60 ) {
+            $score = 3; // Merit
+        }
+        if ( $adj_l3va >= 90 ) {
+            $score = 4; // Distinction
+        }    
+
+    } else if ( $scale == 'A Level' ) {
+        // We're using an A Level scale.
+        // AS Levels are exactly half of A (A2) Levels, if we need to know them in the future.
+
+        // As A Level grades are precisely 30 apart, to get a TAG one grade up we just add 30 to the score.
+        if ( $tag ) {
+            $adj_l3va = $adj_l3va + 30;
+        }
+
+        $score = 1; // U
+        if ( $adj_l3va >= 30 ) {
+            $score = 2; // E
+        }
+        if ( $adj_l3va >= 60 ) {
+            $score = 3; // D
+        }
+        if ( $adj_l3va >= 90 ) {
+            $score = 4; // C
+        }
+        if ( $adj_l3va >= 120 ) {
+            $score = 5; // B
+        }
+        if ( $adj_l3va >= 150 ) {
+            $score = 6; // A
+        }
+        //if ( $adj_l3va >= 180 ) {
+        //    $score = 7; // A*
+        //}
+
+        return array( $score, $adj_l3va );
+    }
+
 }
 
 // Define the wanted column names (will appear in this order in the Gradebook, initially).
 $column_names = array(
     'TAG'   => 'Target Achievable Grade.',
-    'L3VA'  => 'Level 3 Value Added (the new LAT).',
-    'MAG'   => 'Minimum Achievable Grade.',
+    'L3VA'  => 'Level 3 Value Added.',
+    //'MAG'   => 'Guide Minimum Achievable Grade.',
+    'MAG'   => 'Indicative Minimum Achievable Grade.',
 );
 
 // Make an array keyed to the column names to store the grades in.
@@ -113,46 +180,60 @@ $cat_name = 'Targets';
 // All courses which are appropriately tagged.
 $courses = $DB->get_records_select(
     'course',
-    "idnumber LIKE '%|leapcore_%|%'",
-    //"idnumber LIKE '%|leapcore_test|%'",
+    "idnumber LIKE '%|" . IDNUMBERLIKE . "|%'",
     null,
     "id ASC",
     'id, shortname, idnumber'
 );
 if ( !$courses ) {
-    tlog('No courses tagged \'leapcore_*\' found, so halting.', 'EROR');
+    tlog('No courses tagged \'' . IDNUMBERLIKE . '\' found, so halting.', 'EROR');
     exit(0);
 }
 
 /**
  * Sets up each course tagged with leapcore_ with a category and columns within it.
  */
+$num_courses = count($courses);
+$cur_courses = 0;
 foreach ($courses as $course) {
 
-//$thing = new grade_seq(2);
-//print_object($thing);
-//die();
+    $cur_courses++;
 
+    tlog('Processing course (' . $cur_courses . '/' . $num_courses . ') ' . $course->shortname . ' (id: ' . $course->id . ').', 'info');
 
-    tlog('Processing course ' . $course->shortname . ' (' . $course->id . ').', 'info');
+    // Set up the scale to be used here, null by default.
+    $course->scalename  = '';
+    $course->scaleid    = null;
 
-/*
-    // Figure out the scale here. Scales are defined at the top (based on mdl_scale.id) and applied based on how the course is tagged.
-    $scaleid = 0;
+    $leapcore = explode( '|', $course->idnumber );
+    foreach ( $leapcore as $key => $value ) {
+        if ( empty( $value ) ) {
+            unset ( $leapcore[$key] );
+        } else {
+            // This check is specifically for A2 (A Level) courses.
+            if ( stristr( $value, str_replace ( '%', '', IDNUMBERLIKE ) . 'a2' ) ) {
+                $course->scalename  = 'A Level';
+                $course->coursetype = $value;
 
-    foreach ( $course_type_scales as $type => $scale) {
-        if ( stripos( $course->idnumber, $type ) ) {
-            tlog('Course type \'' . $type . '\' (' . $scale . ') found for course ' . $course->id . '.' );
-            $scaleid = $scale;
-            break;
+                tlog( 'Course ' . $course->id . ' appears to be an A Level (A2) course, so setting that scale for use later.', 'info' );
+
+                // Get the scale ID.
+                if ( !$moodlescaleid = $DB->get_record( 'scale', array( 'name' => 'A Level' ), 'id' ) ) {
+                    tlog( ' Could not find a scale called \'' . $course->scalename . '\' for course ' . $course->id . '.', 'warn' );
+
+                } else {
+                    // Scale located.
+                    $course->scaleid = $moodlescaleid->id;
+                    tlog( ' Scale called \'' . $course->scalename . '\' found with ID ' . $moodlescaleid->id . '.', 'info' );
+                }
+
+                break;
+            }
         }
+
     }
 
-    if ( !$scaleid ) {
-        tlog('No course type \'leapcourse_*\' found for course ' . $course->id . ', so no scale could be set.', 'warn' );
-    }
-*/
-
+    // Just for internal use, defines the grade type (int) and what it is (string).
     $gradetypes = array (
         0 => 'None',    // Scale ID: null
         1 => 'Value',   // Scale ID: null. Uses grademax and grademin instead.
@@ -160,9 +241,16 @@ foreach ($courses as $course) {
         3 => 'Text',    // ...
     );
 
+    // If we've found an A2 course, set the scale here.
+    if ( !empty( $course->scalename ) ) {
+        $gradeid = 2;                   // Set this to scale. 
+        $scaleid = $course->scaleid;    // Set this to what we pulled out of Moodle earlier.
+
+        tlog(' Grade ID \'' . $gradeid . '\' and scale ID \'' . $scaleid . '\' set.');
+
     // Figure out the grade type and scale here, pulled directly from the course's gradebook's course itemtype.
-    if ( $coursegradescale = $DB->get_record( 'grade_items', array( 'courseid' => $course->id, 'itemtype' => 'course' ), 'gradetype, scaleid' ) ) {
-        //var_dump($coursegradescale);
+    } else if ( $coursegradescale = $DB->get_record( 'grade_items', array( 'courseid' => $course->id, 'itemtype' => 'course' ), 'gradetype, scaleid' ) ) {
+
         $gradeid = $coursegradescale->gradetype;
         $scaleid = $coursegradescale->scaleid;
 
@@ -171,9 +259,15 @@ foreach ($courses as $course) {
 
         // If the grade type is 2 / scale.
         if ( $gradeid == 2 ) {
-            if ( $coursescale = $DB->get_record( 'scale', array( 'id' => $scaleid = $coursegradescale->scaleid ) ) ) {
+            if ( $coursescale = $DB->get_record( 'scale', array( 'id' => $scaleid ) ) ) {
 
-                // We don't need to do anything with this just yet.
+                $course->scalename  = $coursescale->name;
+                $course->scaleid    = $scaleid;
+
+                $course->coursetype = $coursescale->name;
+                $course->scalename  = $coursescale->name;
+
+
                 $tolog = ' Scale \'' . $coursescale->id . '\' (' . $coursescale->name . ') found [' . $coursescale->scale . ']';
                 $tolog .= ( $coursescale->courseid ) ? ' (which is specific to course ' . $coursescale->courseid . ')' : ' (which is global)';
                 $tolog .= '.';
@@ -193,7 +287,6 @@ foreach ($courses as $course) {
         $scaleid = 0;
         tlog('No \'gradetype\' found, so using defaults instead.', 'info');
     }
-
 
 
     /**
@@ -273,27 +366,27 @@ foreach ($courses as $course) {
             // Per-column specifics.
             if ( $col_name == 'TAG' ) {
                 $grade_item->sortorder  = 1;
-//                if ( $scaleid ) {
-                    $grade_item->gradetype  = $gradeid;
-                    $grade_item->scaleid    = $scaleid;
-//                }
+                $grade_item->gradetype  = $gradeid;
+                $grade_item->scaleid    = $scaleid;
+                $grade_item->display    = 3; // Letter. MIGHT need to seperate out options for BTEC and A Level.
             }
             if ( $col_name == 'L3VA' ) {
                 // Lock the L3VA col as it's calculated elsewhere.
                 $grade_item->sortorder  = 2;
                 $grade_item->locked     = 1;
                 $grade_item->decimals   = 0;
+                $grade_item->display    = 1; // Integer representing the L3VA
             }
             if ( $col_name == 'MAG' ) {
                 $grade_item->sortorder  = 3;
-                $grade_item->locked     = 1;
-//                if ( $scaleid ) {
-                    $grade_item->gradetype  = $gradeid;
-                    $grade_item->scaleid    = $scaleid;
-//                }
+                //$grade_item->locked     = 1;
+                $grade_item->gradetype  = $gradeid;
+                $grade_item->scaleid    = $scaleid;
+                $grade_item->display    = 3; // Letter.
             }
 
             // Scale ID, generated earlier. An int, 0 or greater.
+            // TODO: Check if we need this any more!!
             $grade_item->scale = $scaleid;
 
             // Save it all.
@@ -354,22 +447,23 @@ foreach ($courses as $course) {
             // Attempt to extract the student ID from the username.
             $tmp = explode('@', $enrollee->username);
             $enrollee->studentid = $tmp[0];
-            if ( strlen( $enrollee->studentid ) != 8 && !is_numeric( $enrollee->studentid ) ) {
-                // This is most likely a satff member enrolled as a student, so skip.
-                tlog(' Ignoring (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '].', 'skip');
-            } else {
+//            if ( strlen( $enrollee->studentid ) != 8 && !is_numeric( $enrollee->studentid ) ) {
+//                // This is most likely a satff member enrolled as a student, so skip.
+//                tlog(' Ignoring (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '].', 'skip');
+//            } else {
                 // A proper student, hopefully.
-                tlog(' Processing (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] on course ' . $course->id . '.', 'info');
+                tlog(' Processing user (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] on course ' . $course->id . '.', 'info');
 
                 // Assemble the URL with the correct data.
-                $leapdataurl = sprintf( LEAP_TRACKER_API, $CFG->trackerhash, $enrollee->studentid );
+                //$leapdataurl = sprintf( LEAP_TRACKER_API, $CFG->trackerhash, $enrollee->studentid );
+                $leapdataurl = sprintf( LEAP_TRACKER_API, $enrollee->studentid, $CFG->trackerhash );
                 if ( DEBUG ) {
                     tlog('  Leap URL: ' . $leapdataurl, 'dbug');
                 }
 
                 // Use fopen to read from the API.
-                $handle = fopen($leapdataurl, 'r');
-                if (!$handle) {
+                //$handle = fopen($leapdataurl, 'r');
+                if ( !$handle = fopen($leapdataurl, 'r') ) {
                     // If the API can't be reached for some reason.
                     tlog(' Cannot open ' . $leapdataurl . '.', 'EROR');
 
@@ -392,7 +486,7 @@ foreach ($courses as $course) {
 
                         // Checking for JSON decoding errors, seems only right.
                         if ( json_last_error() ) {
-                            tlog('  JSON decoding returned error code ' . json_last_error() . '.', 'EROR');
+                            tlog('  JSON decoding returned error code ' . json_last_error() . ' for user ' . $enrollee->studentid . '.', 'EROR');
                         } else {
 
                             // Handle any status which is not 'ok' from the API.
@@ -404,8 +498,8 @@ foreach ($courses as $course) {
 //
 //                            } else {
                                 // We have a L3VA score! Woo!
-                                //$targets['l3va'] = $leapdata->data->scores->l3va;
                                 $targets['l3va'] = number_format( $leapdata->person->l3va, DECIMALS );
+                                //$targets['l3va'] = number_format( 12.3456, DECIMALS );
                                 if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] < 0 ) {
                                     // If the L3VA isn't good.
                                     tlog('  L3VA is not good: \'' . $targets['l3va'] . '\'.', 'warn');
@@ -415,14 +509,16 @@ foreach ($courses as $course) {
                                     tlog('  ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] L3VA score: ' . $targets['l3va'] . '.', 'info');
 
                                     // Make the MAG from the L3VA.
-                                    $targets['mag'] = make_mag_tag( $targets['l3va'] );
+                                    $magtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename );
+                                    $targets['mag'] = $magtemp[0];
 
-                                    // Make the TAG, or don't: wanted to suggest a TAG but it's better left empty, apparently.
-                                    //$targets['tag'] = make_mag_tag( $targets['l3va'], 'tag' );
-                                    $targets['tag'] = 0;
+                                    // Decided this is better as null for the time being. Or not.
+                                    //$targets['tag'] = null;
+                                    $tagtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename, true );
+                                    $targets['tag'] = $tagtemp[0];
 
                                     if ( DEBUG ) {
-                                        tlog('   MAG: ' . $targets['mag'] . '. TAG: ' . $targets['tag'] . '.', 'dbug');
+                                        tlog('   Generated data: MAG: ' . $targets['mag'] . ' ['. $magtemp[1] .']. TAG: ' . $targets['tag'] . ' ['. $tagtemp[1] .'].', 'dbug');
                                     }
 
                                     // Loop through all three settable, updateable grades.
@@ -479,6 +575,11 @@ foreach ($courses as $course) {
 
                                             } // END ignore updating the TAG.
 
+                                            // Experimental stuff.
+                                            // Moving gradebook items around.
+
+
+
                                         } // END insert or update check.
 
                                     } // END foreach loop.
@@ -493,7 +594,7 @@ foreach ($courses as $course) {
 
                 } // END open leap API for reading.
 
-            } // END extracting the student id number.
+//            } // END extracting the student id number.
 
         } // END cycle through each course enrollee.
 

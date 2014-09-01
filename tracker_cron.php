@@ -32,8 +32,6 @@ tlog('', '----');
 define( 'CLI_SCRIPT', true );
 
 // Sample Leap Tracker API URL.
-//define( 'LEAP_TRACKER_API', 'http://172.21.4.85/api.php?hash=%s&id=%s' );
-// Another sample Leap Tracker API URL.
 define( 'LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
 
 // Number of decimal places in the processed targets (and elsewhere).
@@ -113,9 +111,6 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
     // Adjust the score acording to formulas.
     $adj_l3va = ( $l3va_data[$course]['m'] * $in ) - $l3va_data[$course]['c'];
 
-//die($adj_l3va);
-//die($scale);
-
     // Return a grade based on whatever scale we're using.
     if ( $scale == 'BTEC' ) {
         // Using BTEC scale.
@@ -130,7 +125,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         if ( $adj_l3va >= 90 ) {
             $score = 4; // Distinction
         }    
-//die('score: '.$score);
+
     } else if ( $scale == 'A Level' ) {
         // We're using an A Level scale.
         // AS Levels are exactly half of A (A2) Levels, if we need to know them in the future.
@@ -156,6 +151,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         if ( $adj_l3va >= 150 ) {
             $score = 6; // A
         }
+        // If we ever use A*.
         //if ( $adj_l3va >= 180 ) {
         //    $score = 7; // A*
         //}
@@ -335,10 +331,6 @@ foreach ($courses as $course) {
     // and the grades counting towards the total course grade.
     $DB->set_field_select('grade_items', 'gradetype', 0, "courseid = " . $course->id . " AND itemtype = 'category' AND iteminstance = " . $cat_id);
 
-    // Move the category to the first position in the gradebook. Need some Moodle functions for this.
-    //$gtree = new grade_tree($course->id, false, false);
-    //$temp = grade_edit_tree::move_elements(1, '')
-
     /**
      * Column checking or creation.
      */
@@ -409,6 +401,13 @@ foreach ($courses as $course) {
 
 
     /**
+     * Move the category to the first location in the gradebook if it isn't already.
+     */
+    //$gtree = new grade_tree($course->id, false, false);
+    //$temp = grade_edit_tree::move_elements(1, '')
+
+
+    /**
      * Collect enrolments based on each of those courses
      */
 
@@ -453,10 +452,10 @@ foreach ($courses as $course) {
             // Attempt to extract the student ID from the username.
             $tmp = explode('@', $enrollee->username);
             $enrollee->studentid = $tmp[0];
-//            if ( strlen( $enrollee->studentid ) != 8 && !is_numeric( $enrollee->studentid ) ) {
-//                // This is most likely a satff member enrolled as a student, so skip.
-//                tlog(' Ignoring (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '].', 'skip');
-//            } else {
+            //if ( strlen( $enrollee->studentid ) != 8 && !is_numeric( $enrollee->studentid ) ) {
+            //    // This is most likely a staff member enrolled as a student, so skip.
+            //    tlog(' Ignoring (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '].', 'skip');
+            //} else {
                 // A proper student, hopefully.
                 tlog(' Processing user (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] on course ' . $course->id . '.', 'info');
 
@@ -505,7 +504,6 @@ foreach ($courses as $course) {
 //                            } else {
                                 // We have a L3VA score! Woo!
                                 $targets['l3va'] = number_format( $leapdata->person->l3va, DECIMALS );
-                                //$targets['l3va'] = number_format( 12.3456, DECIMALS );
                                 if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] < 0 ) {
                                     // If the L3VA isn't good.
                                     tlog('  L3VA is not good: \'' . $targets['l3va'] . '\'.', 'warn');
@@ -518,10 +516,11 @@ foreach ($courses as $course) {
                                     $magtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename );
                                     $targets['mag'] = $magtemp[0];
 
-                                    // Decided this is better as null for the time being. Or not.
-                                    //$targets['tag'] = null;
+                                    // Make the TAG in the same way, setting 'true' at the end for the next grade up.
                                     $tagtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename, true );
                                     $targets['tag'] = $tagtemp[0];
+                                    // If we want to set no TAG, don't set '0' as this is probably a failing grade. Use 'null'.
+                                    //$targets['tag'] = null;
 
                                     if ( DEBUG ) {
                                         tlog('   Generated data: MAG: ' . $targets['mag'] . ' ['. $magtemp[1] .']. TAG: ' . $targets['tag'] . ' ['. $tagtemp[1] .'].', 'dbug');
@@ -560,10 +559,8 @@ foreach ($courses as $course) {
                                             }
 
                                         } else {
-                                            // If the row already exists, update.
-
-                                            // Don't *update* the TAG, ever.
-                                        //    if ( $target != 'tag' ) {
+                                            // If the row already exists, update, but don't ever *update* the TAG.
+                                            if ( $target != 'tag' ) {
                                                 $grade->id = $gradegrade->id;
 
                                                 // We don't want to set this again, but we do want the modified time set.
@@ -576,15 +573,10 @@ foreach ($courses as $course) {
                                                     tlog('   ' . strtoupper( $target ) . ' (' . $score . ') update for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
                                                 }
 
-                                        //    } else {
-                                        //        tlog('   ' . strtoupper( $target ) . ' purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'skip' );
+                                            } else {
+                                                tlog('   ' . strtoupper( $target ) . ' purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'skip' );
 
-                                        //    } // END ignore updating the TAG.
-
-                                            // Experimental stuff.
-                                            // Moving gradebook items around.
-
-
+                                            } // END ignore updating the TAG.
 
                                         } // END insert or update check.
 
@@ -600,7 +592,7 @@ foreach ($courses as $course) {
 
                 } // END open leap API for reading.
 
-//            } // END extracting the student id number.
+            //} // END extracting the student id number.
 
         } // END cycle through each course enrollee.
 

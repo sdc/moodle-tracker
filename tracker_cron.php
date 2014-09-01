@@ -82,6 +82,8 @@ $l3va_data = array(
 
     'leapcore_default'          => array('m' => 4.8008, 'c' => 126.18),
 
+    'btec'                      => array('m' => 4.8008, 'c' => 126.18),
+
 );
 
 //var_dump($l3va_data); die();
@@ -97,8 +99,6 @@ function tlog($msg, $type = 'ok') {
 // Process the L3VA score into a MAG.
 function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = false ) {
 
-//die('scale:' . $scale);
-
     if ( $in == '' || !is_numeric($in) || $in <= 0 || !$in ) {
         return false;
     }
@@ -106,10 +106,15 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         return false;
     }
 
+    $course = strtolower( $course );
+
     global $l3va_data;
 
     // Adjust the score acording to formulas.
     $adj_l3va = ( $l3va_data[$course]['m'] * $in ) - $l3va_data[$course]['c'];
+
+//die($adj_l3va);
+//die($scale);
 
     // Return a grade based on whatever scale we're using.
     if ( $scale == 'BTEC' ) {
@@ -125,7 +130,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         if ( $adj_l3va >= 90 ) {
             $score = 4; // Distinction
         }    
-
+//die('score: '.$score);
     } else if ( $scale == 'A Level' ) {
         // We're using an A Level scale.
         // AS Levels are exactly half of A (A2) Levels, if we need to know them in the future.
@@ -155,8 +160,9 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         //    $score = 7; // A*
         //}
 
-        return array( $score, $adj_l3va );
     }
+
+    return array( $score, $adj_l3va );
 
 }
 
@@ -368,21 +374,21 @@ foreach ($courses as $course) {
                 $grade_item->sortorder  = 1;
                 $grade_item->gradetype  = $gradeid;
                 $grade_item->scaleid    = $scaleid;
-                $grade_item->display    = 3; // Letter. MIGHT need to seperate out options for BTEC and A Level.
+                $grade_item->display    = 1; // 'Real'. MIGHT need to seperate out options for BTEC and A Level.
             }
             if ( $col_name == 'L3VA' ) {
                 // Lock the L3VA col as it's calculated elsewhere.
                 $grade_item->sortorder  = 2;
                 $grade_item->locked     = 1;
                 $grade_item->decimals   = 0;
-                $grade_item->display    = 1; // Integer representing the L3VA
+                $grade_item->display    = 1; // 'Real'.
             }
             if ( $col_name == 'MAG' ) {
                 $grade_item->sortorder  = 3;
                 //$grade_item->locked     = 1;
                 $grade_item->gradetype  = $gradeid;
                 $grade_item->scaleid    = $scaleid;
-                $grade_item->display    = 3; // Letter.
+                $grade_item->display    = 1; // 'Real'.
             }
 
             // Scale ID, generated earlier. An int, 0 or greater.
@@ -557,7 +563,7 @@ foreach ($courses as $course) {
                                             // If the row already exists, update.
 
                                             // Don't *update* the TAG, ever.
-                                            if ( $target != 'tag' ) {
+                                        //    if ( $target != 'tag' ) {
                                                 $grade->id = $gradegrade->id;
 
                                                 // We don't want to set this again, but we do want the modified time set.
@@ -570,10 +576,10 @@ foreach ($courses as $course) {
                                                     tlog('   ' . strtoupper( $target ) . ' (' . $score . ') update for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
                                                 }
 
-                                            } else {
-                                                tlog('   ' . strtoupper( $target ) . ' purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'skip' );
+                                        //    } else {
+                                        //        tlog('   ' . strtoupper( $target ) . ' purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'skip' );
 
-                                            } // END ignore updating the TAG.
+                                        //    } // END ignore updating the TAG.
 
                                             // Experimental stuff.
                                             // Moving gradebook items around.

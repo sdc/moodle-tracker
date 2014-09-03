@@ -32,7 +32,8 @@ tlog('', '----');
 define( 'CLI_SCRIPT', true );
 
 // Sample Leap Tracker API URL.
-define( 'LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
+//define( 'LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
+define( 'LEAP_TRACKER_API', 'http://leap.southdevon.ac.uk/people/%s.json?token=%s' );
 
 // Number of decimal places in the processed targets (and elsewhere).
 define( 'DECIMALS', 3 );
@@ -44,7 +45,7 @@ define( 'DEBUG', true );
 define( 'IDNUMBERLIKE', 'leapcore_%' );
 //define( 'IDNUMBERLIKE', 'leapcore_test' );
 
-require_once 'config.php';
+require_once '../../config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
 
 // Check for the required config setting in config.php.
@@ -129,6 +130,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
     } else if ( $scale == 'A Level' ) {
         // We're using an A Level scale.
         // AS Levels are exactly half of A (A2) Levels, if we need to know them in the future.
+        // Does this system work for L3 (English and Maths) GSCEs also?
 
         // As A Level grades are precisely 30 apart, to get a TAG one grade up we just add 30 to the score.
         if ( $tag ) {
@@ -161,6 +163,15 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
     return array( $score, $adj_l3va );
 
 }
+
+
+// Just for internal use, defines the grade type (int) and what it is (string).
+$gradetypes = array (
+    0 => 'None',    // Scale ID: null
+    1 => 'Value',   // Scale ID: null. Uses grademax and grademin instead.
+    2 => 'Scale',   // Scale ID depends on whatever's available: IDs relate to mdl_scale.id.
+    3 => 'Text',    // ...
+);
 
 // Define the wanted column names (will appear in this order in the Gradebook, initially).
 $column_names = array(
@@ -234,14 +245,6 @@ foreach ($courses as $course) {
         }
 
     }
-
-    // Just for internal use, defines the grade type (int) and what it is (string).
-    $gradetypes = array (
-        0 => 'None',    // Scale ID: null
-        1 => 'Value',   // Scale ID: null. Uses grademax and grademin instead.
-        2 => 'Scale',   // Scale ID depends on whatever's available: IDs relate to mdl_scale.id.
-        3 => 'Text',    // ...
-    );
 
     // If we've found an A2 course, set the scale here.
     if ( !empty( $course->scalename ) ) {

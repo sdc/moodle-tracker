@@ -25,8 +25,12 @@
 // Script start time.
 $time_start = microtime(true);
 
-tlog('Started at ' . date( 'c', $time_start ) . '.', ' go ');
-tlog('', '----');
+$version    = '1.0.0';
+$build      = '20140909';
+
+tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
+tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
+tlog( '', '----' );
 
 // Make this work from a CLI.
 define( 'CLI_SCRIPT', true );
@@ -39,7 +43,7 @@ define( 'LEAP_TRACKER_API', 'http://leap.southdevon.ac.uk/people/%s.json?token=%
 define( 'DECIMALS', 3 );
 
 // Debugging.
-define( 'DEBUG', true );
+define( 'DEBUG', false );
 
 // Search term to use when searching for courses to process.
 define( 'IDNUMBERLIKE', 'leapcore_%' );
@@ -525,9 +529,9 @@ foreach ($courses as $course) {
                                     // If we want to set no TAG, don't set '0' as this is probably a failing grade. Use 'null'.
                                     //$targets['tag'] = null;
 
-                                    if ( DEBUG ) {
-                                        tlog('   Generated data: MAG: ' . $targets['mag'] . ' ['. $magtemp[1] .']. TAG: ' . $targets['tag'] . ' ['. $tagtemp[1] .'].', 'dbug');
-                                    }
+                                    //if ( DEBUG ) {
+                                        tlog('   Generated data: MAG: ' . $targets['mag'] . ' ['. $magtemp[1] .']. TAG: ' . $targets['tag'] . ' ['. $tagtemp[1] .'].', 'info');
+                                    //}
 
                                     // Loop through all three settable, updateable grades.
                                     foreach ( $targets as $target => $score ) {

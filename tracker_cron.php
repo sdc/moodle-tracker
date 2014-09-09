@@ -507,7 +507,7 @@ foreach ($courses as $course) {
 //                            } else {
                                 // We have a L3VA score! Woo!
                                 $targets['l3va'] = number_format( $leapdata->person->l3va, DECIMALS );
-                                if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] < 0 ) {
+                                if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] <= 0 ) {
                                     // If the L3VA isn't good.
                                     tlog('  L3VA is not good: \'' . $targets['l3va'] . '\'.', 'warn');
 
@@ -541,6 +541,7 @@ foreach ($courses as $course) {
                                         // Check to see if this data already exists in the database, so we can insert or update.
                                         $gradegrade = $DB->get_record('grade_grades', array( 
                                             'itemid' => $gradeitem->id,
+                                            'userid' => $enrollee->userid,
                                         ), 'id');
 
                                         // New grade_grade object.

@@ -25,8 +25,8 @@
 // Script start time.
 $time_start = microtime(true);
 
-$version    = '1.0.0';
-$build      = '20140909';
+$version    = '1.0.5';
+$build      = '20140912';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -99,7 +99,14 @@ function tlog($msg, $type = 'ok') {
 
 }
 
-// Process the L3VA score into a MAG.
+/**
+ * Process the L3VA score into a MAG.
+ *
+ * @param in        L3VA score (float)
+ * @param course    Tagged course type
+ * @param scale     Scale to use for this course
+ * @param tag       If true, make the TAG instead of MAG
+ */
 function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = false ) {
 
     if ( $in == '' || !is_numeric($in) || $in <= 0 || !$in ) {
@@ -113,11 +120,15 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
 
     global $l3va_data;
 
-    // Adjust the score acording to formulas.
-    $adj_l3va = ( $l3va_data[$course]['m'] * $in ) - $l3va_data[$course]['c'];
+    // Make the score acording to formulas if the scales are usable.
+    if ( $scale == 'BTEC' || $scale == 'A Level' ) {
+        $adj_l3va = ( $l3va_data[$course]['m'] * $in ) - $l3va_data[$course]['c'];
+    } else {
+        $adj_l3va = $in;
+    }
 
     // Return a grade based on whatever scale we're using.
-    if ( $scale == 'BTEC' ) {
+    if ( $scale == 'BTEC' && !$tag ) {
         // Using BTEC scale.
         
         $score = 1; // Refer
@@ -131,6 +142,10 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
             $score = 4; // Distinction
         }    
 
+    } else if ( $scale == 'BTEC' && $tag ) {
+        // We don't want to add in TAGs for BTEC, so return null.
+        $score = null;
+
     } else if ( $scale == 'A Level' ) {
         // We're using an A Level scale.
         // AS Levels are exactly half of A (A2) Levels, if we need to know them in the future.
@@ -138,7 +153,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
 
         // As A Level grades are precisely 30 apart, to get a TAG one grade up we just add 30 to the score.
         if ( $tag ) {
-            $adj_l3va = $adj_l3va + 30;
+            $adj_l3va += 30;
         }
 
         $score = 1; // U
@@ -162,6 +177,12 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         //    $score = 7; // A*
         //}
 
+    } else if ( $scale == 'noscale' ) {
+        // Using no scale, simply return null.
+        $score = null;
+    } else {
+        // Set a default score if none of the above criteria are met.
+        $score = null;
     }
 
     return array( $score, $adj_l3va );
@@ -181,7 +202,6 @@ $gradetypes = array (
 $column_names = array(
     'TAG'   => 'Target Achievable Grade.',
     'L3VA'  => 'Level 3 Value Added.',
-    //'MAG'   => 'Guide Minimum Achievable Grade.',
     'MAG'   => 'Indicative Minimum Achievable Grade.',
 );
 
@@ -245,6 +265,8 @@ foreach ($courses as $course) {
                 }
 
                 break;
+            } else {
+                $course->coursetype = $value;
             }
         }
 
@@ -274,8 +296,6 @@ foreach ($courses as $course) {
                 $course->scaleid    = $scaleid;
 
                 $course->coursetype = $coursescale->name;
-                $course->scalename  = $coursescale->name;
-
 
                 $tolog = ' Scale \'' . $coursescale->id . '\' (' . $coursescale->name . ') found [' . $coursescale->scale . ']';
                 $tolog .= ( $coursescale->courseid ) ? ' (which is specific to course ' . $coursescale->courseid . ')' : ' (which is global)';
@@ -288,7 +308,18 @@ foreach ($courses as $course) {
                 tlog(' Gradetype \'2\' set, but no matching scale found.', 'warn');
 
             }
+
+        } else if ( $gradeid == 1 ) {
+            // If the grade type is 1 / value.
+            $course->scalename  = 'noscale';
+            $course->scaleid    = 1;
+            // Already set, above.
+            //$course->coursetype = 'Value';
+
+            $tolog = ' Using \'' . $gradetypes[$gradeid] . '\' gradetype.';
+
         }
+
 
     } else {
         // Set it to default if no good scale could be found/used.
@@ -526,12 +557,8 @@ foreach ($courses as $course) {
                                     // Make the TAG in the same way, setting 'true' at the end for the next grade up.
                                     $tagtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename, true );
                                     $targets['tag'] = $tagtemp[0];
-                                    // If we want to set no TAG, don't set '0' as this is probably a failing grade. Use 'null'.
-                                    //$targets['tag'] = null;
 
-                                    //if ( DEBUG ) {
-                                        tlog('   Generated data: MAG: ' . $targets['mag'] . ' ['. $magtemp[1] .']. TAG: ' . $targets['tag'] . ' ['. $tagtemp[1] .'].', 'info');
-                                    //}
+                                    tlog('   Generated data: MAG: \'' . $targets['mag'] . '\' ['. $magtemp[1] .']. TAG: \'' . $targets['tag'] . '\' ['. $tagtemp[1] .'].', 'info');
 
                                     // Loop through all three settable, updateable grades.
                                     foreach ( $targets as $target => $score ) {
@@ -558,8 +585,9 @@ foreach ($courses as $course) {
                                         $grade->timecreated     = time();
                                         $grade->timemodified    = $grade->timecreated;
 
+                                        // If no id exists, INSERT.
                                         if ( !$gradegrade ) {
-                                            // No id exists, so insert.
+
                                             if ( !$gl = $grade->insert() ) {
                                                 tlog('   ' . strtoupper( $target ) . ' insert failed for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'EROR' );
                                             } else {

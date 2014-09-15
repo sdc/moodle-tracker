@@ -6,9 +6,9 @@ One Git repo for all the brainfunk associated with this project.
 
 Place this file into the root on your Moodle 2.7 installation and add to cron thus:
 
-> `0 0 * * * root php /srv/moodle/tracker_cron.php > /tmp/moodle-tracker-cron.log 2>&1`
+> `0 2 * * * root php /srv/moodle/tracker_cron.php > /tmp/moodletrackercron.log 2>&1`
 
-0 minutes and 0 hours (midnight) every day, run this script and dump the output (if any) into a file.
+0 minutes and 2 hours (2am) every day, run this script and dump the output into a file.
 
 ### To do
 

@@ -1,23 +1,12 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * A script, to be run via cron, to pull L3VA scores from Leap and generate the MAG, for each student on specifically-tagged courses.
+ * A script, to be run via cron, to pull L3VA scores from Leap and generate
+ * the MAG, for each student on specifically-tagged courses, and add it into
+ * our live Moodle.
  *
- * @package   ext_cron
+ * Add to admin/cli/ and run via cron.
+ *
  * @copyright 2014 Paul Vaughan
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -25,11 +14,18 @@
 // Script start time.
 $time_start = microtime(true);
 
-$version    = '1.0.5';
-$build      = '20140912';
+// If not null, run the script only for this course, for testing or one-offs.
+$thiscourse = null;
+//$thiscourse = 6666;
+
+$version    = '1.0.6';
+$build      = '20140915';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
+if ( $thiscourse ) {
+    tlog( 'IMPORTANT! Processing only course \'' . $thiscourse . '\'.', 'warn' );
+}
 tlog( '', '----' );
 
 // Make this work from a CLI.
@@ -48,6 +44,9 @@ define( 'DEBUG', false );
 // Search term to use when searching for courses to process.
 define( 'IDNUMBERLIKE', 'leapcore_%' );
 //define( 'IDNUMBERLIKE', 'leapcore_test' );
+
+// Category details for the above columns to go into.
+define( 'CATNAME', 'Targets' );
 
 require_once '../../config.php';
 require_once $CFG->dirroot.'/grade/lib.php';
@@ -71,7 +70,9 @@ $l3va_data = array(
     'leapcore_a2_envstud'       => array('m' => 6.1058, 'c' => 196.66),
     'leapcore_a2_filmstud'      => array('m' => 4.0471, 'c' => 76.470),
     'leapcore_a2_geography'     => array('m' => 5.4727, 'c' => 156.16),
+    'leapcore_a2_govpoli'       => array('m' => 5.3215, 'c' => 145.38),
     'leapcore_a2_history'       => array('m' => 4.6593, 'c' => 118.98),
+    'leapcore_a2_humanbiology'  => array('m' => 5.2471, 'c' => 166.67), // Copied from biology.
     'leapcore_a2_law'           => array('m' => 5.1047, 'c' => 140.69),
     'leapcore_a2_maths'         => array('m' => 4.5738, 'c' => 119.43),
     'leapcore_a2_mathsfurther'  => array('m' => 4.4709, 'c' => 106.40),
@@ -130,7 +131,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
     // Return a grade based on whatever scale we're using.
     if ( $scale == 'BTEC' && !$tag ) {
         // Using BTEC scale.
-        
+
         $score = 1; // Refer
         if ( $adj_l3va >= 30 ) {
             $score = 2; // Pass
@@ -140,7 +141,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         }
         if ( $adj_l3va >= 90 ) {
             $score = 4; // Distinction
-        }    
+        }
 
     } else if ( $scale == 'BTEC' && $tag ) {
         // We don't want to add in TAGs for BTEC, so return null.
@@ -211,18 +212,24 @@ foreach ( $column_names as $name => $desc ) {
     $targets[strtolower($name)] = '';
 }
 
-// Category details for the above columns to go into.
-$cat_name = 'Targets';
+// If $thiscourse is set, query only that course.
+$thiscoursestring = '';
+if ( $thiscourse ) {
+    $thiscoursestring = ' AND id = ' . $thiscourse;
+}
 
 // All courses which are appropriately tagged.
 $courses = $DB->get_records_select(
     'course',
-    "idnumber LIKE '%|" . IDNUMBERLIKE . "|%'",
+    "idnumber LIKE '%|" . IDNUMBERLIKE . "|%'" . $thiscoursestring,
     null,
     "id ASC",
     'id, shortname, idnumber'
 );
-if ( !$courses ) {
+if ( !$courses && $thiscourse ) {
+    tlog('No courses tagged \'' . IDNUMBERLIKE . '\' with ID \'' . $thiscourse . '\' found, so halting.', 'EROR');
+    exit(0);
+} else if ( !$courses ) {
     tlog('No courses tagged \'' . IDNUMBERLIKE . '\' found, so halting.', 'EROR');
     exit(0);
 }
@@ -274,7 +281,7 @@ foreach ($courses as $course) {
 
     // If we've found an A2 course, set the scale here.
     if ( !empty( $course->scalename ) ) {
-        $gradeid = 2;                   // Set this to scale. 
+        $gradeid = 2;                   // Set this to scale.
         $scaleid = $course->scaleid;    // Set this to what we pulled out of Moodle earlier.
 
         tlog(' Grade ID \'' . $gradeid . '\' and scale ID \'' . $scaleid . '\' set.');
@@ -332,9 +339,9 @@ foreach ($courses as $course) {
     /**
      * Category checking or creation.
      */
-    if ( $DB->get_record( 'grade_categories', array( 'courseid' => $course->id, 'fullname' => $cat_name ) ) ) {
+    if ( $DB->get_record( 'grade_categories', array( 'courseid' => $course->id, 'fullname' => CATNAME ) ) ) {
         // Category exists, so skip creation.
-        tlog('Category \'' . $cat_name . '\' already exists for course ' . $course->id . '.', 'skip');
+        tlog('Category \'' . CATNAME . '\' already exists for course ' . $course->id . '.', 'skip');
 
     } else {
         // Create a category for this course.
@@ -344,24 +351,24 @@ foreach ($courses as $course) {
         $grade_category->courseid = $course->id;
 
         // Set the category name (no description).
-        $grade_category->fullname = $cat_name;
+        $grade_category->fullname = CATNAME;
 
         // Set the sort order (making this the first category in the gradebook, hopefully).
         $grade_category->sortorder = 1;
 
         // Save all that...
         if ( !$gc = $grade_category->insert() ) {
-            tlog('Category \'' . $cat_name . '\' could not be inserted for course '.$course->id.'.', 'EROR');
+            tlog('Category \'' . CATNAME . '\' could not be inserted for course '.$course->id.'.', 'EROR');
             exit(1);
         } else {
-            tlog('Category \'' . $cat_name . '\' (' . $gc . ') created for course '.$course->id.'.');
+            tlog('Category \'' . CATNAME . '\' (' . $gc . ') created for course '.$course->id.'.');
         }
     }
 
     // We've either checked a category exists or created one, so this *should* always work.
     $cat_id = $DB->get_record( 'grade_categories', array(
         'courseid' => $course->id,
-        'fullname' => $cat_name,
+        'fullname' => CATNAME,
     ) );
     $cat_id = $cat_id->id;
 
@@ -451,36 +458,37 @@ foreach ($courses as $course) {
 
     // EPIC 'get enrolled students' query from Stack Overflow:
     // http://stackoverflow.com/questions/22161606/sql-query-for-courses-enrolment-on-moodle
-    // Works in MySQL(I), I hope it works elsewhere too.
+    // Only selects manually enrolled, not self-enrolled student roles.
     $sql = "SELECT DISTINCT u.id AS userid, firstname, lastname, username
         FROM mdl_user u
             JOIN mdl_user_enrolments ue ON ue.userid = u.id
             JOIN mdl_enrol e ON e.id = ue.enrolid
+                AND e.enrol = 'manual'
             JOIN mdl_role_assignments ra ON ra.userid = u.id
-            JOIN mdl_context ct ON ct.id = ra.contextid 
+            JOIN mdl_context ct ON ct.id = ra.contextid
                 AND ct.contextlevel = 50
-            JOIN mdl_course c ON c.id = ct.instanceid 
+            JOIN mdl_course c ON c.id = ct.instanceid
                 AND e.courseid = c.id
-            JOIN mdl_role r ON r.id = ra.roleid 
+            JOIN mdl_role r ON r.id = ra.roleid
                 AND r.shortname = 'student'
         WHERE courseid = " . $course->id . "
-            AND e.status = 0 
-            AND u.suspended = 0 
+            AND e.status = 0
+            AND u.suspended = 0
             AND u.deleted = 0
             AND (
-                ue.timeend = 0 
-                OR ue.timeend > NOW() 
-            ) 
+                ue.timeend = 0
+                OR ue.timeend > NOW()
+            )
             AND ue.status = 0
         ORDER BY userid ASC;";
 
     if ( !$enrollees = $DB->get_records_sql( $sql ) ) {
-        tlog('No enrolled students found for course ' . $course->id . '.', 'warn');
+        tlog('No manually enrolled students found for course ' . $course->id . '.', 'warn');
 
     } else {
 
         $num_enrollees = count($enrollees);
-        tlog('Found ' . $num_enrollees . ' students enrolled onto course ' . $course->id . '.', 'info');
+        tlog('Found ' . $num_enrollees . ' students manually enrolled onto course ' . $course->id . '.', 'info');
 
         // A variable to store which employee we're processing.
         $cur_enrollees = 0;

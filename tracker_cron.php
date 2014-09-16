@@ -19,7 +19,7 @@ $time_start = microtime(true);
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.7';
+$version    = '1.0.8';
 $build      = '20140916';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
@@ -53,7 +53,7 @@ require_once $CFG->dirroot.'/grade/lib.php';
 
 // Check for the required config setting in config.php.
 if ( !$CFG->trackerhash ) {
-    tlog('$CFG->trackerhash not set in config.php.', 'EROR');
+    tlog( '$CFG->trackerhash not set in config.php.', 'EROR' );
     exit(1);
 }
 
@@ -64,7 +64,7 @@ $logging = array(
     'grade_types'       => array(       // Can set these, but they'll get created automatically if they don't exist.
         'btec'              => 0,       // +1 for each BTEC course.
         'a level'           => 0,       // +1 for each A Level course.
-                                        // For the sake of not causing PHP Notices, added the following:
+        // For the sake of not causing PHP Notices, added the following:
         'refer and pass'    => 0,
         'noscale'           => 0,
         'develop, pass'     => 0,
@@ -695,6 +695,43 @@ $logging['num']['poor_grades'] = count($logging['poor_grades']);
 var_dump($logging);
 //$json = json_encode($logging);
 //echo $json."\n";
+
+if ( $logging['num']['courses'] ) {
+    tlog( '  ' . $logging['num']['courses'] . ' courses.', 'smry' );
+    foreach ( $logging['num']['courses'] as $course ) {
+        echo $course . "\n";
+    }
+} else {
+    tlog( '  No courses processed.', 'warn' );
+}
+
+if ( $logging['num']['students'] ) {
+    tlog( '  ' . $logging['num']['students'] . ' students.', 'smry' );
+    foreach ( $logging['num']['students'] as $student ) {
+        echo $student . "\n";
+    }
+} else {
+    tlog( '  No students processed.', 'warn' );
+}
+
+if ( $logging['num']['grade_types'] ) {
+    tlog( '  ' . $logging['num']['grade_types'] . ' grade types.', 'smry' );
+    foreach ( $logging['num']['students'] as $grade_type => $count ) {
+        echo $grade_type . ': ' . ' . $count . ' . ".\n";
+    }
+} else {
+    tlog( '  No grade_types found.', 'warn' );
+}
+
+if ( $logging['num']['poor_grades'] ) {
+    tlog('  ' . $logging['num']['poor_grades'] . ' poor grades.', 'smry');
+    foreach ( $logging['num']['poor_grades'] as $grade ) {
+        echo $grade . "\n";
+    }
+} else {
+    tlog( '  No poor grades found. Good!' );
+}
+
 
 // Finish time.
 $time_end = microtime(true);

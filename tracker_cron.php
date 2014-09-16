@@ -14,12 +14,11 @@
 // Script start time.
 $time_start = microtime(true);
 
-// If not null, run the script only for this course, for testing or one-offs.
-$thiscourse = null;
-//$thiscourse = 6666;
+// Null or an int (course's id): run the script only for this course. For testing or one-offs.
+$thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.6';
-$build      = '20140915';
+$version    = '1.0.7';
+$build      = '20140916';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -32,7 +31,6 @@ tlog( '', '----' );
 define( 'CLI_SCRIPT', true );
 
 // Sample Leap Tracker API URL.
-//define( 'LEAP_TRACKER_API', 'http://172.21.11.5:3000/people/%s.json?token=%s' );
 define( 'LEAP_TRACKER_API', 'http://leap.southdevon.ac.uk/people/%s.json?token=%s' );
 
 // Number of decimal places in the processed targets (and elsewhere).
@@ -56,6 +54,28 @@ if ( !$CFG->trackerhash ) {
     tlog('$CFG->trackerhash not set in config.php.', 'EROR');
     exit(1);
 }
+
+// Logging array for the end-of-script summary.
+$logging = array(
+    'courses'           => array(),     // For each course which has been processed (key is id).
+    'students'          => array(),     // For each student who has been processed.
+    'grade_types'       => array(       // Can set these, but they'll get created automatically if they don't exist.
+        'btec'              => 0,       // +1 for each BTEC course.
+        'a level'           => 0,       // +1 for each A Level course.
+                                        // For the sake of not causing PHP Notices, added the following:
+        'refer and pass'    => 0,
+        'noscale'           => 0,
+        'develop, pass'     => 0,
+    ),
+    'poor_grades'       => array(),     // An entry for each student with a E, F, U, Refer, etc.
+
+    'num'               => array(
+        'courses'           => 0,       // Integer number of courses processed.
+        'students'          => 0,       // Integer number of students processed.
+        'grade_types'       => 0,       // Integer number of grade types (should be the same as courses - relevant?).
+        'poor_grades'       => 0,       // Integer number of poorly-graded students processed.
+    ),
+);
 
 $l3va_data = array(
     'leapcore_a2_artdes'        => array('m' => 4.4727, 'c' => 98.056),
@@ -224,7 +244,7 @@ $courses = $DB->get_records_select(
     "idnumber LIKE '%|" . IDNUMBERLIKE . "|%'" . $thiscoursestring,
     null,
     "id ASC",
-    'id, shortname, idnumber'
+    'id, shortname, fullname, idnumber'
 );
 if ( !$courses && $thiscourse ) {
     tlog('No courses tagged \'' . IDNUMBERLIKE . '\' with ID \'' . $thiscourse . '\' found, so halting.', 'EROR');
@@ -244,6 +264,7 @@ foreach ($courses as $course) {
     $cur_courses++;
 
     tlog('Processing course (' . $cur_courses . '/' . $num_courses . ') ' . $course->shortname . ' (id: ' . $course->id . ').', 'info');
+    $logging['courses'][] = $course->fullname . ' (' . $course->shortname . ') [' . $course->id . '].';
 
     // Set up the scale to be used here, null by default.
     $course->scalename  = '';
@@ -334,6 +355,8 @@ foreach ($courses as $course) {
         $scaleid = 0;
         tlog('No \'gradetype\' found, so using defaults instead.', 'info');
     }
+
+    $logging['grade_types'][strtolower($course->scalename)]++;
 
 
     /**
@@ -490,7 +513,7 @@ foreach ($courses as $course) {
         $num_enrollees = count($enrollees);
         tlog('Found ' . $num_enrollees . ' students manually enrolled onto course ' . $course->id . '.', 'info');
 
-        // A variable to store which employee we're processing.
+        // A variable to store which enrollee we're processing.
         $cur_enrollees = 0;
         foreach ($enrollees as $enrollee) {
             $cur_enrollees++;
@@ -504,6 +527,7 @@ foreach ($courses as $course) {
             //} else {
                 // A proper student, hopefully.
                 tlog(' Processing user (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] on course ' . $course->id . '.', 'info');
+                $logging['students'][] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
 
                 // Assemble the URL with the correct data.
                 //$leapdataurl = sprintf( LEAP_TRACKER_API, $CFG->trackerhash, $enrollee->studentid );
@@ -567,6 +591,12 @@ foreach ($courses as $course) {
                                     $targets['tag'] = $tagtemp[0];
 
                                     tlog('   Generated data: MAG: \'' . $targets['mag'] . '\' ['. $magtemp[1] .']. TAG: \'' . $targets['tag'] . '\' ['. $tagtemp[1] .'].', 'info');
+                                    if ( $targets['mag'] == 'U' || $targets['mag'] == 'F' || $targets['mag'] == 'E' ) {
+                                        $logging['poor_grades'][] = 'MAG ' . $targets['mag'] . ' assigned to ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
+                                    }
+                                    if ( $targets['tag'] == 'U' || $targets['tag'] == 'F' || $targets['tag'] == 'E') {
+                                        $logging['poor_grades'][] = 'TAG ' . $targets['tag'] . ' assigned to ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
+                                    }
 
                                     // Loop through all three settable, updateable grades.
                                     foreach ( $targets as $target => $score ) {
@@ -647,11 +677,27 @@ foreach ($courses as $course) {
 
 } // END foreach course tagged 'leapcore_*'.
 
+// Sort and dump the summary log.
+tlog(' Summary of all performed operations.', 'smry');
+asort($logging['courses']);
+asort($logging['students']);
+
+// Processing.
+$logging['num']['courses']  = count($logging['courses']);
+$logging['num']['students'] = count($logging['students']);
+foreach ( $logging['grade_types'] as $value ) {
+    $logging['num']['grade_types'] += $value ;
+}
+$logging['num']['poor_grades'] = count($logging['poor_grades']);
+
+var_dump($logging);
+//$json = json_encode($logging);
+//echo $json."\n";
+
 // Finish time.
 $time_end = microtime(true);
-
 $duration = $time_end - $time_start;
-
+tlog('', '----');
 tlog('Finished at ' . date( 'c', $time_end ) . ', took ' . number_format( $duration, DECIMALS ) . ' seconds.', 'done');
 
 exit(0);

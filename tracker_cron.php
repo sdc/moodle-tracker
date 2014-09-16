@@ -10,7 +10,7 @@
  * @copyright 2014 Paul Vaughan
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  *
- * TODO:    Consider $thiscurse as an array, not an integer.
+ * TODO:    Consider $thiscourse as an array, not an integer.
  */
 
 // Script start time.

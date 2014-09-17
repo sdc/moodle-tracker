@@ -687,49 +687,59 @@ asort($logging['students']);
 // Processing.
 $logging['num']['courses']  = count($logging['courses']);
 $logging['num']['students'] = count($logging['students']);
+$logging['num']['grade_types'] = count($logging['grade_types']);
 foreach ( $logging['grade_types'] as $value ) {
-    $logging['num']['grade_types'] += $value ;
+    $logging['num']['grade_types_in_use'] += $value ;
 }
 $logging['num']['poor_grades'] = count($logging['poor_grades']);
 
-var_dump($logging);
+//var_dump($logging);
 //$json = json_encode($logging);
 //echo $json."\n";
 
+//echo '<pre>'; var_dump($logging['num']); die();
+tlog('', '----');
 if ( $logging['num']['courses'] ) {
-    tlog( '  ' . $logging['num']['courses'] . ' courses.', 'smry' );
-    foreach ( $logging['num']['courses'] as $course ) {
-        echo $course . "\n";
+    tlog( $logging['num']['courses'] . ' courses:', 'smry' );
+    $count = 0;
+    foreach ( $logging['courses'] as $course ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $course . "\n";
     }
 } else {
-    tlog( '  No courses processed.', 'warn' );
+    tlog( 'No courses processed.', 'warn' );
 }
 
+tlog('', '----');
 if ( $logging['num']['students'] ) {
-    tlog( '  ' . $logging['num']['students'] . ' students.', 'smry' );
-    foreach ( $logging['num']['students'] as $student ) {
-        echo $student . "\n";
+    tlog( $logging['num']['students'] . ' students:', 'smry' );
+    $count = 0;
+    foreach ( $logging['students'] as $student ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $student . "\n";
     }
 } else {
-    tlog( '  No students processed.', 'warn' );
+    tlog( 'No students processed.', 'warn' );
 }
 
+tlog('', '----');
 if ( $logging['num']['grade_types'] ) {
-    tlog( '  ' . $logging['num']['grade_types'] . ' grade types.', 'smry' );
-    foreach ( $logging['num']['students'] as $grade_type => $count ) {
-        echo $grade_type . ': ' . ' . $count . ' . ".\n";
+    tlog( $logging['num']['grade_types'] . ' grade types with ' . $logging['num']['grade_types_in_use']  . ' grades set:', 'smry' );
+    $count = 0;
+    foreach ( $logging['grade_types'] as $grade_type => $num_grades ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $grade_type . ': ' . $num_grades . ".\n";
     }
 } else {
-    tlog( '  No grade_types found.', 'warn' );
+    tlog( 'No grade_types found.', 'warn' );
 }
 
+tlog('', '----');
 if ( $logging['num']['poor_grades'] ) {
-    tlog('  ' . $logging['num']['poor_grades'] . ' poor grades.', 'smry');
-    foreach ( $logging['num']['poor_grades'] as $grade ) {
-        echo $grade . "\n";
+    tlog( $logging['num']['poor_grades'] . ' poor grades:', 'smry');
+    $count = 0;
+    foreach ( $logging['poor_grades'] as $poorgrade ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $poorgrade . "\n";
     }
 } else {
-    tlog( '  No poor grades found. Good!' );
+    tlog( 'No poor grades found. Good!', 'smry' );
 }
 
 

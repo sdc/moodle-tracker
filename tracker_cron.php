@@ -48,7 +48,7 @@ define( 'IDNUMBERLIKE', 'leapcore_%' );
 // Category details for the above columns to go into.
 define( 'CATNAME', 'Targets' );
 
-require_once '../../config.php';
+require(dirname(dirname(dirname(__FILE__))).'/config.php');
 require_once $CFG->dirroot.'/grade/lib.php';
 
 // Check for the required config setting in config.php.

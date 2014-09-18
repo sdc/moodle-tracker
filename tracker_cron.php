@@ -112,8 +112,6 @@ $l3va_data = array(
 
 );
 
-//var_dump($l3va_data); die();
-
 // A little function to make the output look nice.
 function tlog($msg, $type = 'ok') {
 
@@ -593,10 +591,10 @@ foreach ($courses as $course) {
                                     $targets['tag'] = $tagtemp[0];
 
                                     tlog('   Generated data: MAG: \'' . $targets['mag'] . '\' ['. $magtemp[1] .']. TAG: \'' . $targets['tag'] . '\' ['. $tagtemp[1] .'].', 'info');
-                                    if ( $targets['mag'] == 'U' || $targets['mag'] == 'F' || $targets['mag'] == 'E' ) {
+                                    if ( $targets['mag'] == '0' || $targets['mag'] == '1' ) {
                                         $logging['poor_grades'][] = 'MAG ' . $targets['mag'] . ' assigned to ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
                                     }
-                                    if ( $targets['tag'] == 'U' || $targets['tag'] == 'F' || $targets['tag'] == 'E') {
+                                    if ( $targets['mag'] == '0' || $targets['tag'] == '1' ) {
                                         $logging['poor_grades'][] = 'TAG ' . $targets['tag'] . ' assigned to ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
                                     }
 

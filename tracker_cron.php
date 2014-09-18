@@ -62,6 +62,7 @@ $logging = array(
     'courses'               => array(),     // For each course which has been processed (key is id).
     'students_processed'    => array(),     // For each student who has been processed.
     'students_unique'       => array(),     // For each unique student who has been processed.
+    'no_l3va'               => array(),     // Students with no L3VA.
     'grade_types'           => array(       // Can set these, but they'll get created automatically if they don't exist.
         'btec'                  => 0,       // +1 for each BTEC course.
         'a level'               => 0,       // +1 for each A Level course.
@@ -76,6 +77,7 @@ $logging = array(
         'courses'               => 0,       // Integer number of courses processed.
         'students_processed'    => 0,       // Integer number of students processed.
         'students_unique'       => 0,       // Integer number of unique students processed.
+        'no_l3va'               => 0,       // Integer number of unique students with no L3VA score.
         'grade_types'           => 0,       // Integer number of grades used.
         'grade_types_in_use'    => 0,       // Integer number of grade types.
         'poor_grades'           => 0,       // Integer number of poorly-graded students processed.
@@ -581,6 +583,7 @@ foreach ($courses as $course) {
                                 if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] <= 0 ) {
                                     // If the L3VA isn't good.
                                     tlog('  L3VA is not good: \'' . $targets['l3va'] . '\'.', 'warn');
+                                    $logging['no_l3va'][$enrollee->userid] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '].';
 
                                 } else {
 
@@ -686,12 +689,14 @@ tlog(' Summary of all performed operations.', 'smry');
 asort($logging['courses']);
 asort($logging['students_processed']);
 asort($logging['students_unique']);
+asort($logging['no_l3va']);
 arsort($logging['grade_types']);
 
 // Processing.
 $logging['num']['courses']  = count($logging['courses']);
 $logging['num']['students_processed'] = count($logging['students_processed']);
 $logging['num']['students_unique'] = count($logging['students_unique']);
+$logging['num']['no_l3va'] = count($logging['no_l3va']);
 $logging['num']['grade_types'] = count($logging['grade_types']);
 foreach ( $logging['grade_types'] as $value ) {
     $logging['num']['grade_types_in_use'] += $value;
@@ -734,6 +739,17 @@ if ( $logging['num']['students_unique'] ) {
     }
 } else {
     tlog( 'No unique students processed.', 'warn' );
+}
+
+tlog('', '----');
+if ( $logging['num']['no_l3va'] ) {
+    tlog( $logging['num']['no_l3va'] . ' students with no L3VA:', 'smry' );
+    $count = 0;
+    foreach ( $logging['no_l3va'] as $no_l3va ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $no_l3va . "\n";
+    }
+} else {
+    tlog( 'No missing L3VAs.', 'warn' );
 }
 
 tlog('', '----');

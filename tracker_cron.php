@@ -19,8 +19,8 @@ $time_start = microtime(true);
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.8';
-$build      = '20140916';
+$version    = '1.0.9';
+$build      = '20140918';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -266,7 +266,7 @@ foreach ($courses as $course) {
 
     $cur_courses++;
 
-    tlog('Processing course (' . $cur_courses . '/' . $num_courses . ') ' . $course->shortname . ' (id: ' . $course->id . ').', 'info');
+    tlog('Processing course (' . $cur_courses . '/' . $num_courses . ') ' . $course->fullname . ' (' . $course->shortname . ') [' . $course->id . '] at ' . date( 'c', time() ) . '.', 'info');
     $logging['courses'][] = $course->fullname . ' (' . $course->shortname . ') [' . $course->id . '].';
 
     // Set up the scale to be used here, null by default.

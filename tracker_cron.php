@@ -59,23 +59,26 @@ if ( !$CFG->trackerhash ) {
 
 // Logging array for the end-of-script summary.
 $logging = array(
-    'courses'           => array(),     // For each course which has been processed (key is id).
-    'students'          => array(),     // For each student who has been processed.
-    'grade_types'       => array(       // Can set these, but they'll get created automatically if they don't exist.
-        'btec'              => 0,       // +1 for each BTEC course.
-        'a level'           => 0,       // +1 for each A Level course.
+    'courses'               => array(),     // For each course which has been processed (key is id).
+    'students_processed'    => array(),     // For each student who has been processed.
+    'students_unique'       => array(),     // For each unique student who has been processed.
+    'grade_types'           => array(       // Can set these, but they'll get created automatically if they don't exist.
+        'btec'                  => 0,       // +1 for each BTEC course.
+        'a level'               => 0,       // +1 for each A Level course.
         // For the sake of not causing PHP Notices, added the following:
-        'refer and pass'    => 0,
-        'noscale'           => 0,
-        'develop, pass'     => 0,
+        'refer and pass'        => 0,
+        'noscale'               => 0,
+        'develop, pass'         => 0,
     ),
-    'poor_grades'       => array(),     // An entry for each student with a E, F, U, Refer, etc.
+    'poor_grades'           => array(),     // An entry for each student with a E, F, U, Refer, etc.
 
-    'num'               => array(
-        'courses'           => 0,       // Integer number of courses processed.
-        'students'          => 0,       // Integer number of students processed.
-        'grade_types'       => 0,       // Integer number of grade types (should be the same as courses - relevant?).
-        'poor_grades'       => 0,       // Integer number of poorly-graded students processed.
+    'num'                   => array(
+        'courses'               => 0,       // Integer number of courses processed.
+        'students_processed'    => 0,       // Integer number of students processed.
+        'students_unique'       => 0,       // Integer number of unique students processed.
+        'grade_types'           => 0,       // Integer number of grades used.
+        'grade_types_in_use'    => 0,       // Integer number of grade types.
+        'poor_grades'           => 0,       // Integer number of poorly-graded students processed.
     ),
 );
 
@@ -527,7 +530,8 @@ foreach ($courses as $course) {
             //} else {
                 // A proper student, hopefully.
                 tlog(' Processing user (' . $cur_enrollees . '/' . $num_enrollees . ') ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] on course ' . $course->id . '.', 'info');
-                $logging['students'][] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
+                $logging['students_processed'][] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
+                $logging['students_unique'][$enrollee->userid] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '].';
 
                 // Assemble the URL with the correct data.
                 //$leapdataurl = sprintf( LEAP_TRACKER_API, $CFG->trackerhash, $enrollee->studentid );
@@ -680,14 +684,17 @@ foreach ($courses as $course) {
 // Sort and dump the summary log.
 tlog(' Summary of all performed operations.', 'smry');
 asort($logging['courses']);
-asort($logging['students']);
+asort($logging['students_processed']);
+asort($logging['students_unique']);
+arsort($logging['grade_types']);
 
 // Processing.
 $logging['num']['courses']  = count($logging['courses']);
-$logging['num']['students'] = count($logging['students']);
+$logging['num']['students_processed'] = count($logging['students_processed']);
+$logging['num']['students_unique'] = count($logging['students_unique']);
 $logging['num']['grade_types'] = count($logging['grade_types']);
 foreach ( $logging['grade_types'] as $value ) {
-    $logging['num']['grade_types_in_use'] += $value ;
+    $logging['num']['grade_types_in_use'] += $value;
 }
 $logging['num']['poor_grades'] = count($logging['poor_grades']);
 
@@ -708,14 +715,25 @@ if ( $logging['num']['courses'] ) {
 }
 
 tlog('', '----');
-if ( $logging['num']['students'] ) {
-    tlog( $logging['num']['students'] . ' students:', 'smry' );
+if ( $logging['num']['students_processed'] ) {
+    tlog( $logging['num']['students_processed'] . ' student-courses processed:', 'smry' );
     $count = 0;
-    foreach ( $logging['students'] as $student ) {
+    foreach ( $logging['students_processed'] as $student ) {
         echo sprintf( '%4s', ++$count ) . ': ' . $student . "\n";
     }
 } else {
-    tlog( 'No students processed.', 'warn' );
+    tlog( 'No student-courses processed.', 'warn' );
+}
+
+tlog('', '----');
+if ( $logging['num']['students_unique'] ) {
+    tlog( $logging['num']['students_unique'] . ' unique students:', 'smry' );
+    $count = 0;
+    foreach ( $logging['students_unique'] as $student ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $student . "\n";
+    }
+} else {
+    tlog( 'No unique students processed.', 'warn' );
 }
 
 tlog('', '----');

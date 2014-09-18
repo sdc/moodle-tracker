@@ -601,7 +601,7 @@ foreach ($courses as $course) {
                                     if ( $targets['mag'] == '0' || $targets['mag'] == '1' ) {
                                         $logging['poor_grades'][] = 'MAG ' . $targets['mag'] . ' assigned to ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
                                     }
-                                    if ( $targets['mag'] == '0' || $targets['tag'] == '1' ) {
+                                    if ( $targets['tag'] == '0' || $targets['tag'] == '1' ) {
                                         $logging['poor_grades'][] = 'TAG ' . $targets['tag'] . ' assigned to ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . '.';
                                     }
 

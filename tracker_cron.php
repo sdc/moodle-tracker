@@ -17,10 +17,11 @@
 $time_start = microtime(true);
 
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
-$thiscourse = null; // null or e.g. 1234
+//$thiscourse = null; // null or e.g. 1234
+$thiscourse = 2; // null or e.g. 1234
 
-$version    = '1.0.9';
-$build      = '20140918';
+$version    = '1.0.10';
+$build      = '20140922';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -66,6 +67,7 @@ $logging = array(
     'grade_types'           => array(       // Can set these, but they'll get created automatically if they don't exist.
         'btec'                  => 0,       // +1 for each BTEC course.
         'a level'               => 0,       // +1 for each A Level course.
+        'gcse'                  => 0,       // +1 for each GCSE course.
         // For the sake of not causing PHP Notices, added the following:
         'refer and pass'        => 0,
         'noscale'               => 0,
@@ -115,6 +117,16 @@ $l3va_data = array(
 
     'btec'                      => array('m' => 4.8008, 'c' => 126.18),
 
+    // Tags for GCSE maths and English, for which we ignore all this processing and instead use the grade supplied in the JSON.
+    //'leapcore_gcsemaths'        => array('m' => 1, 'c' => 100),
+    //'leapcore_gcseenglish'      => array('m' => 1, 'c' => 100),
+
+);
+
+// Small array to store the GCSE English and maths grades from the JSON.
+$gcse = array(
+    'english'   => null,
+    'maths'     => null,
 );
 
 // A little function to make the output look nice.
@@ -135,10 +147,11 @@ function tlog($msg, $type = 'ok') {
  */
 function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = false ) {
 
-    if ( $in == '' || !is_numeric($in) || $in <= 0 || !$in ) {
+    //if ( $in == '' || !is_numeric($in) || $in <= 0 || !$in ) {
+    if ( $in == '' || !$in ) {
         return false;
     }
-    if ( $course == '' || !$in ) {
+    if ( $course == '' ) {
         return false;
     }
 
@@ -203,9 +216,37 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         //    $score = 7; // A*
         //}
 
+    } else if ( $scale == 'GCSE' ) {
+
+//echo 'IN: '.$adj_l3va; die();
+
+        $score = 1; // U
+        if ( $adj_l3va == 'U' ) {
+            $score = 1;
+        }
+        if ( $adj_l3va == 'F' ) {
+            $score = 2;
+        }
+        if ( $adj_l3va == 'E' ) {
+            $score = 3;
+        }
+        if ( $adj_l3va == 'D' ) {
+            $score = 4;
+        }
+        if ( $adj_l3va == 'C' ) {
+            $score = 5;
+        }
+        if ( $adj_l3va == 'B' ) {
+            $score = 6;
+        }
+        if ( $adj_l3va == 'A' ) {
+            $score = 7;
+        }
+
     } else if ( $scale == 'noscale' ) {
         // Using no scale, simply return null.
         $score = null;
+
     } else {
         // Set a default score if none of the above criteria are met.
         $score = null;
@@ -298,6 +339,26 @@ foreach ($courses as $course) {
                 }
 
                 break;
+
+            } else if ( stristr( $value, str_replace ( '%', '', IDNUMBERLIKE ) . 'gcse' ) ) {
+                // This check is specifically for GCSE courses.
+                $course->scalename  = 'GCSE';
+                $course->coursetype = $value;
+
+                tlog( 'Course ' . $course->id . ' appears to be a GCSE course, so setting that scale for use later.', 'info' );
+
+                // Get the scale ID.
+                if ( !$moodlescaleid = $DB->get_record( 'scale', array( 'name' => 'GCSE' ), 'id' ) ) {
+                    tlog( ' Could not find a scale called \'' . $course->scalename . '\' for course ' . $course->id . '.', 'warn' );
+
+                } else {
+                    // Scale located.
+                    $course->scaleid = $moodlescaleid->id;
+                    tlog( ' Scale called \'' . $course->scalename . '\' found with ID ' . $moodlescaleid->id . '.', 'info' );
+                }
+
+                break;
+
             } else {
                 $course->coursetype = $value;
             }
@@ -578,8 +639,11 @@ foreach ($courses as $course) {
 //                                tlog('  API returned unexpected status: \'' . $leapdata->status . '\'.', 'EROR');
 //
 //                            } else {
-                                // We have a L3VA score! Woo!
-                                $targets['l3va'] = number_format( $leapdata->person->l3va, DECIMALS );
+                                // We have a L3VA score! And possibly GCSE English and maths grades too.
+                                $targets['l3va']    = number_format( $leapdata->person->l3va, DECIMALS );
+                                $gcse['english']    = $leapdata->person->gcse_english;
+                                $gcse['maths']      = $leapdata->person->gcse_maths;
+
                                 if ( $targets['l3va'] == '' || !is_numeric( $targets['l3va'] ) || $targets['l3va'] <= 0 ) {
                                     // If the L3VA isn't good.
                                     tlog('  L3VA is not good: \'' . $targets['l3va'] . '\'.', 'warn');
@@ -588,13 +652,26 @@ foreach ($courses as $course) {
                                 } else {
 
                                     tlog('  ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] L3VA score: ' . $targets['l3va'] . '.', 'info');
+//echo 'CT: '.$course->coursetype . '. SN: ' . $course->scalename; die();
+//echo 'Eng: '.$targets['gcse_english']; die();
 
-                                    // Make the MAG from the L3VA.
-                                    $magtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename );
+                                    // If this course is tagged as a GCSE English or maths course, use the grades supplied in the JSON.
+                                    if ( $course->coursetype == 'leapcore_gcseenglish' ) {
+                                        $magtemp        = make_mag( $gcse['english'], $course->coursetype, $course->scalename );
+                                        $tagtemp        = array( 0, null );
+
+                                    } else if ( $course->coursetype == 'leapcore_gcsemaths' ) {
+                                        $magtemp        = make_mag( $gcse['maths'], $course->coursetype, $course->scalename );
+                                        $tagtemp        = array( 0, null );
+
+                                    } else {
+                                        // Make the MAG from the L3VA.
+                                        $magtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename );
+                                        // Make the TAG in the same way, setting 'true' at the end for the next grade up.
+                                        $tagtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename, true );
+
+                                    }
                                     $targets['mag'] = $magtemp[0];
-
-                                    // Make the TAG in the same way, setting 'true' at the end for the next grade up.
-                                    $tagtemp        = make_mag( $targets['l3va'], $course->coursetype, $course->scalename, true );
                                     $targets['tag'] = $tagtemp[0];
 
                                     tlog('   Generated data: MAG: \'' . $targets['mag'] . '\' ['. $magtemp[1] .']. TAG: \'' . $targets['tag'] . '\' ['. $tagtemp[1] .'].', 'info');

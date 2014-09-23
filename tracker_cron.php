@@ -17,10 +17,9 @@
 $time_start = microtime(true);
 
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
-//$thiscourse = null; // null or e.g. 1234
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.11';
+$version    = '1.0.12';
 $build      = '20140923';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
@@ -634,11 +633,11 @@ foreach ($courses as $course) {
                             tlog('  ' . $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->userid . ') [' . $enrollee->studentid . '] L3VA score: ' . $targets['l3va'] . '.', 'info');
 
                             // If this course is tagged as a GCSE English or maths course, use the grades supplied in the JSON.
-                            if ( $course->coursetype == 'leapcore_gcseenglish' ) {
+                            if ( $course->coursetype == 'leapcore_gcse_english' ) {
                                 $magtemp        = make_mag( $gcse['english'], $course->coursetype, $course->scalename );
                                 $tagtemp        = array( null, null );
 
-                            } else if ( $course->coursetype == 'leapcore_gcsemaths' ) {
+                            } else if ( $course->coursetype == 'leapcore_gcse_maths' ) {
                                 $magtemp        = make_mag( $gcse['maths'], $course->coursetype, $course->scalename );
                                 $tagtemp        = array( null, null );
 
@@ -652,7 +651,7 @@ foreach ($courses as $course) {
                             $targets['mag'] = $magtemp[0];
                             $targets['tag'] = $tagtemp[0];
 
-                            if ( $course->coursetype == 'leapcore_gcseenglish' || $course->coursetype == 'leapcore_gcsemaths' ) {
+                            if ( $course->coursetype == 'leapcore_gcse_english' || $course->coursetype == 'leapcore_gcse_maths' ) {
                                 tlog('   GCSEs passed through from Leap JSON: MAG: \'' . $targets['mag'] . '\' ['. $magtemp[1] .']. TAG: \'' . $targets['tag'] . '\' ['. $tagtemp[1] .'].', 'info');
                             } else {
                                 tlog('   Generated data: MAG: \'' . $targets['mag'] . '\' ['. $magtemp[1] .']. TAG: \'' . $targets['tag'] . '\' ['. $tagtemp[1] .'].', 'info');

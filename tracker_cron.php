@@ -19,7 +19,7 @@ $time_start = microtime(true);
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.12';
+$version    = '1.0.13';
 $build      = '20140923';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
@@ -833,7 +833,10 @@ if ( $logging['num']['poor_grades'] ) {
 // Finish time.
 $time_end = microtime(true);
 $duration = $time_end - $time_start;
+$mins = ( floor( $duration / 60 ) == 0 ) ? '' : ' minutes';
+$secs = ( ( $duration % 60 ) == 0 ) ? '' : ( $duration % 60 ) . ' seconds';
+$secs = ( $mins == '' ) ? $secs : ' ' . $secs;
 tlog('', '----');
-tlog('Finished at ' . date( 'c', $time_end ) . ', took ' . number_format( $duration, DECIMALS ) . ' seconds.', 'done');
+tlog('Finished at ' . date( 'c', $time_end ) . ', took ' . $mins . $secs . ' (' . number_format( $duration, DECIMALS ) . ' seconds).', 'done');
 
 exit(0);

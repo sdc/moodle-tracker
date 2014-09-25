@@ -20,7 +20,7 @@ $time_start = microtime(true);
 $thiscourse = null; // null or e.g. 1234
 
 $version    = '1.0.13';
-$build      = '20140923';
+$build      = '20140925';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );

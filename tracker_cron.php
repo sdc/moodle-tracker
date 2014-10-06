@@ -19,8 +19,8 @@ $time_start = microtime(true);
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.13';
-$build      = '20140925';
+$version    = '1.0.14';
+$build      = '20141006';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -114,7 +114,7 @@ $l3va_data = array(
 
     'leapcore_default'          => array('m' => 4.8008, 'c' => 126.18),
 
-    'btec'                      => array('m' => 4.8008, 'c' => 126.18),
+    'btec'                      => array('m' => 3.9, 'c' => 90),
 
 );
 
@@ -165,7 +165,7 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
     if ( $scale == 'BTEC' && !$tag ) {
         // Using BTEC scale.
 
-        $score = 1; // Refer
+        $score = 1; // Default grade of 'Refer'.
         if ( $adj_l3va >= 30 ) {
             $score = 2; // Pass
         }
@@ -833,7 +833,7 @@ if ( $logging['num']['poor_grades'] ) {
 // Finish time.
 $time_end = microtime(true);
 $duration = $time_end - $time_start;
-$mins = ( floor( $duration / 60 ) == 0 ) ? '' : ' minutes';
+$mins = ( floor( $duration / 60 ) == 0 ) ? '' : floor( $duration / 60 ) . ' minutes';
 $secs = ( ( $duration % 60 ) == 0 ) ? '' : ( $duration % 60 ) . ' seconds';
 $secs = ( $mins == '' ) ? $secs : ' ' . $secs;
 tlog('', '----');

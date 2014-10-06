@@ -746,6 +746,7 @@ asort($logging['students_processed']);
 asort($logging['students_unique']);
 asort($logging['no_l3va']);
 arsort($logging['grade_types']);
+asort($logging['poor_grades']);
 
 // Processing.
 $logging['num']['courses']  = count($logging['courses']);

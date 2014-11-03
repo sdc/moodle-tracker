@@ -19,8 +19,8 @@ $time_start = microtime(true);
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.14';
-$build      = '20141006';
+$version    = '1.0.15';
+$build      = '20141103';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -234,6 +234,11 @@ function make_mag( $in, $course = 'leapcore_default', $scale = 'BTEC', $tag = fa
         if ( $adj_l3va == 'A' ) {
             $score = 7;
         }
+
+    } else if ( $scale == 'Refer and Pass' ) {
+
+        // Always show a pass. Always.
+        $score = 2; // Pass
 
     } else if ( $scale == 'noscale' ) {
         // Using no scale, simply return null.

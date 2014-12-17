@@ -19,8 +19,8 @@ $time_start = microtime(true);
 // Null or an int (course's id): run the script only for this course. For testing or one-offs.
 $thiscourse = null; // null or e.g. 1234
 
-$version    = '1.0.15';
-$build      = '20141103';
+$version    = '1.0.18';
+$build      = '20141217';
 
 tlog( 'GradeTracker script, v' . $version . ', ' . $build . '.', 'hiya' );
 tlog( 'Started at ' . date( 'c', $time_start ) . '.', ' go ' );
@@ -63,6 +63,7 @@ $logging = array(
     'students_processed'    => array(),     // For each student who has been processed.
     'students_unique'       => array(),     // For each unique student who has been processed.
     'no_l3va'               => array(),     // Students with no L3VA.
+    'not_updated'           => array(),     // An entry for each student where the grade was purposefully not updated (e.g. 0 or null score).
     'grade_types'           => array(       // Can set these, but they'll get created automatically if they don't exist.
         'btec'                  => 0,       // +1 for each BTEC course.
         'a level'               => 0,       // +1 for each A Level course.
@@ -79,6 +80,7 @@ $logging = array(
         'students_processed'    => 0,       // Integer number of students processed.
         'students_unique'       => 0,       // Integer number of unique students processed.
         'no_l3va'               => 0,       // Integer number of unique students with no L3VA score.
+        'not_updated'           => 0,       // Integer number of purposefully not updated students.
         'grade_types'           => 0,       // Integer number of grades used.
         'grade_types_in_use'    => 0,       // Integer number of grade types.
         'poor_grades'           => 0,       // Integer number of poorly-graded students processed.
@@ -308,6 +310,16 @@ foreach ($courses as $course) {
 
     tlog('Processing course (' . $cur_courses . '/' . $num_courses . ') ' . $course->fullname . ' (' . $course->shortname . ') [' . $course->id . '] at ' . date( 'c', time() ) . '.', 'info');
     $logging['courses'][] = $course->fullname . ' (' . $course->shortname . ') [' . $course->id . '].';
+
+    // Get the course's context.
+    $contextid = context_course::instance( $course->id );
+
+//echo '<pre>';
+//var_dump($contextid);
+//echo "=====\n";
+//$letters = grade_get_letters($contextid);
+//var_dump($letters);
+//echo "========================================================\n";
 
     // Set up the scale to be used here, null by default.
     $course->scalename  = '';
@@ -704,8 +716,14 @@ foreach ($courses as $course) {
                                     }
 
                                 } else {
-                                    // If the row already exists, update, but don't ever *update* the TAG.
-                                    if ( $target != 'tag' ) {
+                                    // If the row already exists, UPDATE, but don't ever *update* the TAG.
+
+                                    if ( $target == 'mag' && !$score ) {
+                                        // For MAGs, we don't want to update to a zero or null score as that may overwrite a manually-entered MAG.
+                                        tlog('   ' . strtoupper( $target ) . ' of 0 or null (' . $score . ') purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.' );
+                                        $logging['not_updated'][] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . ': ' . strtoupper( $target ) . ' of \'' . $score . '\'.'; 
+
+                                    } else if ( $target != 'tag' ) {
                                         $grade->id = $gradegrade->id;
 
                                         // We don't want to set this again, but we do want the modified time set.
@@ -720,7 +738,7 @@ foreach ($courses as $course) {
 
                                     } else {
                                         tlog('   ' . strtoupper( $target ) . ' purposefully not updated for user ' . $enrollee->userid . ' on course ' . $course->id . '.', 'skip' );
-
+                                        $logging['not_updated'][] = $enrollee->firstname . ' ' . $enrollee->lastname . ' (' . $enrollee->studentid . ') [' . $enrollee->userid . '] on course ' . $course->id . ': ' . strtoupper( $target ) . ' of \'' . $score . '\'.';
                                     } // END ignore updating the TAG.
 
                                 } // END insert or update check.
@@ -750,6 +768,7 @@ asort($logging['courses']);
 asort($logging['students_processed']);
 asort($logging['students_unique']);
 asort($logging['no_l3va']);
+asort($logging['not_updated']);
 arsort($logging['grade_types']);
 asort($logging['poor_grades']);
 
@@ -758,17 +777,13 @@ $logging['num']['courses']  = count($logging['courses']);
 $logging['num']['students_processed'] = count($logging['students_processed']);
 $logging['num']['students_unique'] = count($logging['students_unique']);
 $logging['num']['no_l3va'] = count($logging['no_l3va']);
+$logging['num']['not_updated'] = count($logging['not_updated']);
 $logging['num']['grade_types'] = count($logging['grade_types']);
 foreach ( $logging['grade_types'] as $value ) {
     $logging['num']['grade_types_in_use'] += $value;
 }
 $logging['num']['poor_grades'] = count($logging['poor_grades']);
 
-//var_dump($logging);
-//$json = json_encode($logging);
-//echo $json."\n";
-
-//echo '<pre>'; var_dump($logging['num']); die();
 tlog('', '----');
 if ( $logging['num']['courses'] ) {
     tlog( $logging['num']['courses'] . ' courses:', 'smry' );
@@ -811,6 +826,17 @@ if ( $logging['num']['no_l3va'] ) {
     }
 } else {
     tlog( 'No missing L3VAs.', 'warn' );
+}
+
+tlog('', '----');
+if ( $logging['num']['not_updated'] ) {
+    tlog( $logging['num']['not_updated'] . ' students purposefully not updated (0 or null grade):', 'smry' );
+    $count = 0;
+    foreach ( $logging['not_updated'] as $not_updated ) {
+        echo sprintf( '%4s', ++$count ) . ': ' . $not_updated . "\n";
+    }
+} else {
+    tlog( 'No students purposefully not updated.', 'warn' );
 }
 
 tlog('', '----');
